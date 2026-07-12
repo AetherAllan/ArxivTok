@@ -12,8 +12,10 @@ import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Paper } from "@/types/paper";
 import type {
-  DownloadEntry,
+  DownloadSummary,
   HistoryEntry,
+  OfflineHtmlEntry,
+  PdfDownloadEntry,
   SavedEntry,
 } from "./library";
 
@@ -23,10 +25,13 @@ type Props = {
   visible: boolean;
   saved: SavedEntry[];
   history: HistoryEntry[];
-  downloads: DownloadEntry[];
+  downloads: DownloadSummary[];
   onUnsave: (arxivId: string) => void;
   onClearHistory: () => void;
   onOpenPaper: (paper: Paper) => void;
+  onOpenOffline: (entry: OfflineHtmlEntry) => void;
+  onOpenPdf: (entry: PdfDownloadEntry) => void;
+  onDeleteDownloads: (arxivId: string) => void;
   onOpenSettings: () => void;
   onClose: () => void;
 };
@@ -39,6 +44,9 @@ export function LibraryScreen({
   onUnsave,
   onClearHistory,
   onOpenPaper,
+  onOpenOffline,
+  onOpenPdf,
+  onDeleteDownloads,
   onOpenSettings,
   onClose,
 }: Props) {
@@ -62,6 +70,22 @@ export function LibraryScreen({
         text: t("library.clear"),
         style: "destructive",
         onPress: onClearHistory,
+      },
+    ]);
+  };
+
+  const openDownload = (item: DownloadSummary) => {
+    if (item.html) onOpenOffline(item.html);
+    else if (item.pdf) onOpenPdf(item.pdf);
+  };
+
+  const confirmDeleteDownload = (item: DownloadSummary) => {
+    Alert.alert(t("library.removeDownloads"), t("library.removeDownloadsBody"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("library.clear"),
+        style: "destructive",
+        onPress: () => onDeleteDownloads(item.arxivId),
       },
     ]);
   };
@@ -124,11 +148,29 @@ export function LibraryScreen({
                 key={item.arxivId}
                 title={item.title}
                 subtitle={item.authors.slice(0, 2).join(", ")}
-                meta={formatTime(entryTime(item), locale)}
-                onPress={() => onOpenPaper(item)}
-                actionLabel={tab === "saved" ? t("library.unsave") : undefined}
+                meta={
+                  tab === "downloads"
+                    ? downloadMeta(item as DownloadSummary, locale)
+                    : formatTime(entryTime(item), locale)
+                }
+                onPress={() =>
+                  tab === "downloads"
+                    ? openDownload(item as DownloadSummary)
+                    : onOpenPaper(item)
+                }
+                actionLabel={
+                  tab === "saved"
+                    ? t("library.unsave")
+                    : tab === "downloads"
+                      ? t("library.manage")
+                      : undefined
+                }
                 onAction={
-                  tab === "saved" ? () => onUnsave(item.arxivId) : undefined
+                  tab === "saved"
+                    ? () => onUnsave(item.arxivId)
+                    : tab === "downloads"
+                      ? () => confirmDeleteDownload(item as DownloadSummary)
+                      : undefined
                 }
               />
             ))
@@ -149,10 +191,17 @@ export function LibraryScreen({
   );
 }
 
-function entryTime(item: SavedEntry | HistoryEntry | DownloadEntry): number {
+function entryTime(item: SavedEntry | HistoryEntry | DownloadSummary): number {
   if ("savedAt" in item) return item.savedAt;
   if ("viewedAt" in item) return item.viewedAt;
-  return item.downloadedAt;
+  return Math.max(item.html?.downloadedAt ?? 0, item.pdf?.downloadedAt ?? 0);
+}
+
+function downloadMeta(item: DownloadSummary, locale: string): string {
+  const kinds = [item.html ? "HTML" : null, item.pdf ? "PDF" : null]
+    .filter(Boolean)
+    .join(" + ");
+  return `${kinds} · ${formatTime(entryTime(item), locale)}`;
 }
 
 function Row({

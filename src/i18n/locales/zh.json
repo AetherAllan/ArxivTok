@@ -11,6 +11,8 @@
     "download": "下载",
     "downloading": "…",
     "downloaded": "已下载",
+    "offlineRead": "离线阅读",
+    "pdfSaved": "PDF 已保存",
     "cancel": "取消",
     "abstract": "摘要",
     "translate": "翻译",
@@ -71,7 +73,14 @@
     "clearHistoryBody": "将删除本机上的浏览记录。",
     "clear": "清空",
     "unsave": "移除",
-    "downloadFailed": "下载失败"
+    "downloadFailed": "下载失败",
+    "downloadChoiceTitle": "下载论文",
+    "downloadHtml": "离线 HTML",
+    "downloadPdf": "PDF",
+    "manage": "管理",
+    "removeDownloads": "删除下载",
+    "removeDownloadsBody": "将删除这篇论文的离线 HTML 和本机 PDF。",
+    "openPdf": "打开 PDF"
   },
   "group": {
     "Browse": "浏览",

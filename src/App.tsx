@@ -14,6 +14,9 @@ import { SettingsScreen } from "@/features/settings/SettingsScreen";
 import { PaperViewer } from "@/features/viewer/PaperViewer";
 import { useAppPrefs } from "@/shared/useAppPrefs";
 import type { Paper } from "@/types/paper";
+import type { OfflineHtmlEntry, PdfDownloadEntry } from "@/features/library/library";
+
+type ViewerState = { paper: Paper; sourceUri?: string };
 
 export default function App() {
   const { t } = useTranslation();
@@ -28,7 +31,7 @@ export default function App() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [viewerPaper, setViewerPaper] = useState<Paper | null>(null);
+  const [viewer, setViewer] = useState<ViewerState | null>(null);
 
   const {
     ready: libraryReady,
@@ -37,35 +40,77 @@ export default function App() {
     downloads,
     downloadingId,
     isSaved,
-    isDownloaded,
+    hasOfflineHtml,
+    hasPdf,
+    getOfflineHtml,
     toggleSave,
     unsave,
     recordHistory,
     clearHistory,
-    download,
+    downloadHtml,
+    downloadPdf,
+    openPdf,
+    deleteDownloads,
   } = useLibrary();
   const feed = usePaperFeed(prefs.categories);
 
   const openPaper = useCallback(
     (paper: Paper) => {
       void recordHistory(paper);
-      setViewerPaper(paper);
+      setViewer({ paper });
     },
     [recordHistory],
   );
 
+  const openOffline = useCallback(
+    (entry: OfflineHtmlEntry) => {
+      void recordHistory(entry);
+      setViewer({ paper: entry, sourceUri: entry.entryUri });
+    },
+    [recordHistory],
+  );
+
+  const showError = useCallback(
+    (error: unknown) => {
+      Alert.alert(
+        t("library.downloadFailed"),
+        error instanceof Error ? error.message : t("common.unknownError"),
+      );
+    },
+    [t],
+  );
+
   const onDownload = useCallback(
-    async (paper: Paper) => {
+    (paper: Paper) => {
+      const offline = getOfflineHtml(paper.arxivId);
+      if (offline) {
+        openOffline(offline);
+        return;
+      }
+      Alert.alert(t("library.downloadChoiceTitle"), paper.title, [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("library.downloadHtml"),
+          onPress: () => void downloadHtml(paper).then(openOffline).catch(showError),
+        },
+        {
+          text: t("library.downloadPdf"),
+          onPress: () => void downloadPdf(paper).catch(showError),
+        },
+      ]);
+    },
+    [downloadHtml, downloadPdf, getOfflineHtml, openOffline, showError, t],
+  );
+
+  const onOpenPdf = useCallback(
+    async (entry: PdfDownloadEntry) => {
       try {
-        await download(paper);
-      } catch (e) {
-        Alert.alert(
-          t("library.downloadFailed"),
-          e instanceof Error ? e.message : t("common.unknownError"),
-        );
+        await openPdf(entry);
+      } catch (error) {
+        showError(error);
       }
     },
-    [download, t],
+    [openPdf, showError],
   );
 
   if (!prefsReady || !libraryReady) {
@@ -97,7 +142,8 @@ export default function App() {
           onOpenLibrary={() => setLibraryOpen(true)}
           onRead={openPaper}
           isSaved={isSaved}
-          isDownloaded={isDownloaded}
+          hasOfflineHtml={hasOfflineHtml}
+          hasPdf={hasPdf}
           downloadingId={downloadingId}
           onToggleSave={toggleSave}
           onDownload={onDownload}
@@ -119,6 +165,12 @@ export default function App() {
             setLibraryOpen(false);
             openPaper(paper);
           }}
+          onOpenOffline={(entry) => {
+            setLibraryOpen(false);
+            openOffline(entry);
+          }}
+          onOpenPdf={(entry) => void onOpenPdf(entry)}
+          onDeleteDownloads={(arxivId) => void deleteDownloads(arxivId)}
           onOpenSettings={() => setSettingsOpen(true)}
           onClose={() => setLibraryOpen(false)}
         />
@@ -132,9 +184,10 @@ export default function App() {
           onClose={() => setSettingsOpen(false)}
         />
         <PaperViewer
-          paper={viewerPaper}
+          paper={viewer?.paper ?? null}
+          sourceUri={viewer?.sourceUri}
           translateLangPref={prefs.translateLang}
-          onClose={() => setViewerPaper(null)}
+          onClose={() => setViewer(null)}
         />
       </GestureHandlerRootView>
     </SafeAreaProvider>

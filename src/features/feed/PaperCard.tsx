@@ -7,7 +7,8 @@ type Props = {
   height: number;
   saved: boolean;
   downloading: boolean;
-  downloaded: boolean;
+  hasOfflineHtml: boolean;
+  hasPdf: boolean;
   onRead: (paper: Paper) => void;
   onToggleSave: (paper: Paper) => void;
   onDownload: (paper: Paper) => void;
@@ -18,7 +19,8 @@ export function PaperCard({
   height,
   saved,
   downloading,
-  downloaded,
+  hasOfflineHtml,
+  hasPdf,
   onRead,
   onToggleSave,
   onDownload,
@@ -98,8 +100,10 @@ export function PaperCard({
           <Text style={styles.secondaryText}>
             {downloading
               ? t("common.downloading")
-              : downloaded
-                ? t("common.downloaded")
+              : hasOfflineHtml
+                ? t("common.offlineRead")
+                : hasPdf
+                  ? t("common.pdfSaved")
                 : t("common.download")}
           </Text>
         </Pressable>

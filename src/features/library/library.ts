@@ -5,7 +5,9 @@ import type { Paper } from "@/types/paper";
 const KEYS = {
   saved: "arxivtok.saved",
   history: "arxivtok.history",
-  downloads: "arxivtok.downloads",
+  pdfDownloads: "arxivtok.pdfDownloads",
+  legacyDownloads: "arxivtok.downloads",
+  offlineHtml: "arxivtok.offlineHtml",
   downloadsDirUri: "arxivtok.downloadsDirUri",
 } as const;
 
@@ -13,18 +15,30 @@ export const HISTORY_CAP = 200;
 
 export type SavedEntry = Paper & { savedAt: number };
 export type HistoryEntry = Paper & { viewedAt: number };
-export type DownloadEntry = Paper & {
+export type PdfDownloadEntry = Paper & {
   localUri: string;
-  /** SAF uri if copied to public folder (content://) — do not pass to Sharing */
+  /** SAF URI when copied to a user-picked public folder. */
   exportUri?: string;
+  exported: boolean;
   downloadedAt: number;
+};
+export type OfflineHtmlEntry = Paper & {
+  entryUri: string;
+  packageDir: string;
+  sourceHash: string;
+  byteSize: number;
+  formatVersion: number;
+  downloadedAt: number;
+};
+export type DownloadSummary = Paper & {
+  html?: OfflineHtmlEntry;
+  pdf?: PdfDownloadEntry;
 };
 
 async function readJson<T>(key: string, fallback: T): Promise<T> {
   try {
     const raw = await AsyncStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
+    return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
     return fallback;
   }
@@ -36,6 +50,38 @@ async function writeJson(key: string, value: unknown): Promise<void> {
   );
 }
 
+function records(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.filter(
+        (item): item is Record<string, unknown> =>
+          item !== null && typeof item === "object",
+      )
+    : [];
+}
+
+/** Older rows are tolerated so app upgrades never discard a user's library. */
+function coercePaper(raw: Record<string, unknown>): Paper | null {
+  const arxivId = typeof raw.arxivId === "string" ? raw.arxivId : null;
+  if (!arxivId) return null;
+  return {
+    arxivId,
+    title: typeof raw.title === "string" ? raw.title : arxivId,
+    abstract: typeof raw.abstract === "string" ? raw.abstract : "",
+    authors: Array.isArray(raw.authors)
+      ? raw.authors.filter((item): item is string => typeof item === "string")
+      : [],
+    categories: Array.isArray(raw.categories)
+      ? raw.categories.filter((item): item is string => typeof item === "string")
+      : [],
+    published: typeof raw.published === "string" ? raw.published : "",
+    updated: typeof raw.updated === "string" ? raw.updated : "",
+    pdfUrl:
+      typeof raw.pdfUrl === "string"
+        ? raw.pdfUrl
+        : `https://export.arxiv.org/pdf/${arxivId}`,
+  };
+}
+
 export async function loadSaved(): Promise<SavedEntry[]> {
   return readJson(KEYS.saved, []);
 }
@@ -44,41 +90,67 @@ export async function loadHistory(): Promise<HistoryEntry[]> {
   return readJson(KEYS.history, []);
 }
 
-/** Fill Paper fields for older download rows that only stored title/authors. */
-function coerceDownload(raw: Record<string, unknown>): DownloadEntry | null {
-  const arxivId = typeof raw.arxivId === "string" ? raw.arxivId : null;
-  if (!arxivId) return null;
-  const title = typeof raw.title === "string" ? raw.title : arxivId;
-  const authors = Array.isArray(raw.authors)
-    ? raw.authors.filter((a): a is string => typeof a === "string")
-    : [];
+function coercePdf(raw: Record<string, unknown>): PdfDownloadEntry | null {
+  const paper = coercePaper(raw);
+  if (!paper || typeof raw.localUri !== "string") return null;
+  const exportUri = typeof raw.exportUri === "string" ? raw.exportUri : undefined;
   return {
-    arxivId,
-    title,
-    abstract: typeof raw.abstract === "string" ? raw.abstract : "",
-    authors,
-    categories: Array.isArray(raw.categories)
-      ? raw.categories.filter((c): c is string => typeof c === "string")
-      : [],
-    published: typeof raw.published === "string" ? raw.published : "",
-    updated: typeof raw.updated === "string" ? raw.updated : "",
-    pdfUrl:
-      typeof raw.pdfUrl === "string"
-        ? raw.pdfUrl
-        : `https://arxiv.org/pdf/${arxivId}.pdf`,
-    localUri: typeof raw.localUri === "string" ? raw.localUri : "",
-    exportUri: typeof raw.exportUri === "string" ? raw.exportUri : undefined,
+    ...paper,
+    localUri: raw.localUri,
+    exportUri,
+    exported: typeof raw.exported === "boolean" ? raw.exported : !!exportUri,
     downloadedAt:
       typeof raw.downloadedAt === "number" ? raw.downloadedAt : Date.now(),
   };
 }
 
-export async function loadDownloads(): Promise<DownloadEntry[]> {
-  const raw = await readJson<unknown[]>(KEYS.downloads, []);
-  return raw
-    .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
-    .map(coerceDownload)
-    .filter((x): x is DownloadEntry => x != null);
+export async function loadPdfDownloads(): Promise<PdfDownloadEntry[]> {
+  const current = await AsyncStorage.getItem(KEYS.pdfDownloads);
+  const legacy = current === null ? await AsyncStorage.getItem(KEYS.legacyDownloads) : null;
+  let parsed: unknown = [];
+  try {
+    parsed = JSON.parse(current ?? legacy ?? "[]") as unknown;
+  } catch {
+    // Corrupt download metadata must not prevent the rest of the library loading.
+  }
+  const entries = records(parsed).map(coercePdf).filter((item) => item !== null);
+  if (current === null && legacy !== null) {
+    await enqueueStorageWrite(async () => {
+      await AsyncStorage.setItem(KEYS.pdfDownloads, JSON.stringify(entries));
+      await AsyncStorage.removeItem(KEYS.legacyDownloads);
+    });
+  }
+  return entries;
+}
+
+function coerceOfflineHtml(
+  raw: Record<string, unknown>,
+): OfflineHtmlEntry | null {
+  const paper = coercePaper(raw);
+  if (
+    !paper ||
+    typeof raw.entryUri !== "string" ||
+    typeof raw.packageDir !== "string" ||
+    typeof raw.sourceHash !== "string"
+  ) {
+    return null;
+  }
+  return {
+    ...paper,
+    entryUri: raw.entryUri,
+    packageDir: raw.packageDir,
+    sourceHash: raw.sourceHash,
+    byteSize: typeof raw.byteSize === "number" ? raw.byteSize : 0,
+    formatVersion: typeof raw.formatVersion === "number" ? raw.formatVersion : 1,
+    downloadedAt:
+      typeof raw.downloadedAt === "number" ? raw.downloadedAt : Date.now(),
+  };
+}
+
+export async function loadOfflineHtml(): Promise<OfflineHtmlEntry[]> {
+  return records(await readJson<unknown>(KEYS.offlineHtml, []))
+    .map(coerceOfflineHtml)
+    .filter((item) => item !== null);
 }
 
 export async function persistSaved(list: SavedEntry[]): Promise<void> {
@@ -89,30 +161,62 @@ export async function persistHistory(list: HistoryEntry[]): Promise<void> {
   await writeJson(KEYS.history, list);
 }
 
-export async function persistDownloads(list: DownloadEntry[]): Promise<void> {
-  await writeJson(KEYS.downloads, list);
+export async function persistPdfDownloads(
+  list: PdfDownloadEntry[],
+): Promise<void> {
+  await writeJson(KEYS.pdfDownloads, list);
+}
+
+export async function persistOfflineHtml(
+  list: OfflineHtmlEntry[],
+): Promise<void> {
+  await writeJson(KEYS.offlineHtml, list);
 }
 
 export function upsertSaved(list: SavedEntry[], paper: Paper): SavedEntry[] {
-  const without = list.filter((p) => p.arxivId !== paper.arxivId);
-  return [{ ...paper, savedAt: Date.now() }, ...without];
+  return [
+    { ...paper, savedAt: Date.now() },
+    ...list.filter((item) => item.arxivId !== paper.arxivId),
+  ];
 }
 
 export function removeSaved(list: SavedEntry[], arxivId: string): SavedEntry[] {
-  return list.filter((p) => p.arxivId !== arxivId);
+  return list.filter((item) => item.arxivId !== arxivId);
 }
 
 export function upsertHistory(list: HistoryEntry[], paper: Paper): HistoryEntry[] {
-  const without = list.filter((p) => p.arxivId !== paper.arxivId);
-  return [{ ...paper, viewedAt: Date.now() }, ...without].slice(0, HISTORY_CAP);
+  return [
+    { ...paper, viewedAt: Date.now() },
+    ...list.filter((item) => item.arxivId !== paper.arxivId),
+  ].slice(0, HISTORY_CAP);
 }
 
-export function upsertDownload(
-  list: DownloadEntry[],
-  entry: DownloadEntry,
-): DownloadEntry[] {
-  const without = list.filter((p) => p.arxivId !== entry.arxivId);
-  return [entry, ...without];
+export function upsertByArxivId<T extends { arxivId: string }>(
+  list: T[],
+  entry: T,
+): T[] {
+  return [entry, ...list.filter((item) => item.arxivId !== entry.arxivId)];
+}
+
+export function summarizeDownloads(
+  html: OfflineHtmlEntry[],
+  pdf: PdfDownloadEntry[],
+): DownloadSummary[] {
+  const summaries = new Map<string, DownloadSummary>();
+  for (const entry of [...html, ...pdf]) {
+    const current = summaries.get(entry.arxivId) ?? entry;
+    summaries.set(entry.arxivId, {
+      ...current,
+      ...(entry as Paper),
+      ...("entryUri" in entry ? { html: entry } : {}),
+      ...("localUri" in entry ? { pdf: entry } : {}),
+    });
+  }
+  return [...summaries.values()].sort(
+    (a, b) =>
+      Math.max(b.html?.downloadedAt ?? 0, b.pdf?.downloadedAt ?? 0) -
+      Math.max(a.html?.downloadedAt ?? 0, a.pdf?.downloadedAt ?? 0),
+  );
 }
 
 export async function getDownloadsDirUri(): Promise<string | null> {

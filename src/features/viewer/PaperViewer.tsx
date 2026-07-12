@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Linking,
   Modal,
   Pressable,
   StyleSheet,
@@ -19,6 +20,7 @@ import type { Paper } from "@/types/paper";
 type Props = {
   paper: Paper | null;
   translateLangPref: TranslateLangPref;
+  sourceUri?: string;
   onClose: () => void;
 };
 
@@ -29,7 +31,7 @@ function paperUri(arxivId: string, translated: boolean, tl: string) {
   return `https://translate.google.com/translate?sl=auto&tl=${encodeURIComponent(tl)}&hl=${encodeURIComponent(tl)}&u=${u}`;
 }
 
-export function PaperViewer({ paper, translateLangPref, onClose }: Props) {
+export function PaperViewer({ paper, translateLangPref, sourceUri, onClose }: Props) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const tl = useMemo(
@@ -45,7 +47,9 @@ export function PaperViewer({ paper, translateLangPref, onClose }: Props) {
     setLoading(true);
   }, [paper?.arxivId]);
 
-  const uri = paper ? paperUri(paper.arxivId, translated, tl) : null;
+  const uri = paper
+    ? sourceUri ?? paperUri(paper.arxivId, translated, tl)
+    : null;
 
   return (
     <Modal
@@ -67,6 +71,15 @@ export function PaperViewer({ paper, translateLangPref, onClose }: Props) {
           setSupportMultipleWindows={false}
           originWhitelist={["*"]}
           mixedContentMode="always"
+          onShouldStartLoadWithRequest={(request) => {
+            if (!sourceUri || request.url.startsWith("file:") || request.url === "about:blank") {
+              return true;
+            }
+            if (/^https?:/i.test(request.url)) {
+              void Linking.openURL(request.url);
+            }
+            return false;
+          }}
         />
 
         <View
@@ -76,7 +89,7 @@ export function PaperViewer({ paper, translateLangPref, onClose }: Props) {
           <Pressable onPress={onClose} hitSlop={10} style={styles.chip}>
             <Text style={styles.chipText}>{t("common.back")}</Text>
           </Pressable>
-          <Pressable
+          {!sourceUri ? <Pressable
             onPress={() => {
               setTranslated((v) => !v);
               setLoading(true);
@@ -87,7 +100,7 @@ export function PaperViewer({ paper, translateLangPref, onClose }: Props) {
             <Text style={styles.chipText}>
               {translated ? t("common.original") : t("common.translate")}
             </Text>
-          </Pressable>
+          </Pressable> : null}
         </View>
 
         {loading ? (

@@ -11,6 +11,8 @@
     "download": "Download",
     "downloading": "…",
     "downloaded": "Downloaded",
+    "offlineRead": "Read offline",
+    "pdfSaved": "PDF saved",
     "cancel": "Cancel",
     "abstract": "Abstract",
     "translate": "Translate",
@@ -71,6 +73,13 @@
     "clearHistoryBody": "This removes your browsing history on this device.",
     "clear": "Clear",
     "unsave": "Remove",
-    "downloadFailed": "Download failed"
+    "downloadFailed": "Download failed",
+    "downloadChoiceTitle": "Download paper",
+    "downloadHtml": "Offline HTML",
+    "downloadPdf": "PDF",
+    "manage": "Manage",
+    "removeDownloads": "Delete downloads",
+    "removeDownloadsBody": "This removes the offline HTML and app-local PDF for this paper.",
+    "openPdf": "Open PDF"
   }
 }

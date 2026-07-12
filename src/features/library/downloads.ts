@@ -1,20 +1,23 @@
 import { Platform } from "react-native";
 import {
   documentDirectory,
+  deleteAsync,
   downloadAsync,
   EncodingType,
   getInfoAsync,
+  getContentUriAsync,
   makeDirectoryAsync,
   readAsStringAsync,
   StorageAccessFramework,
   writeAsStringAsync,
 } from "expo-file-system/legacy";
+import * as IntentLauncher from "expo-intent-launcher";
 import { scheduleArxiv } from "@/lib/arxiv";
 import type { Paper } from "@/types/paper";
 import {
   getDownloadsDirUri,
   setDownloadsDirUri,
-  type DownloadEntry,
+  type PdfDownloadEntry,
 } from "./library";
 
 function appDownloadsDir(): string {
@@ -71,18 +74,12 @@ async function copyToSaf(
   return dest;
 }
 
-export type DownloadResult = {
-  entry: DownloadEntry;
-  /** true if written into user-picked public folder (SAF) */
-  exported: boolean;
-};
-
 /**
  * Download PDF via arXiv rate limiter.
  * Always keeps a copy under app Documents/Downloads/.
  * On Android, also tries SAF → user Download folder (once-granted).
  */
-export async function downloadPaperPdf(paper: Paper): Promise<DownloadResult> {
+export async function downloadPaperPdf(paper: Paper): Promise<PdfDownloadEntry> {
   await ensureAppDownloadsDir();
   const localUri = localPdfPath(paper.arxivId);
 
@@ -115,12 +112,33 @@ export async function downloadPaperPdf(paper: Paper): Promise<DownloadResult> {
     }
   }
 
-  const entry: DownloadEntry = {
+  return {
     ...paper,
     localUri,
     exportUri,
+    exported,
     downloadedAt: Date.now(),
   };
+}
 
-  return { entry, exported };
+export async function openPdf(entry: PdfDownloadEntry): Promise<void> {
+  if (Platform.OS !== "android") {
+    throw new Error("Opening downloaded PDFs is currently supported on Android only");
+  }
+  const uri = entry.exportUri ?? (await getContentUriAsync(entry.localUri));
+  // Grant the chosen PDF app temporary read access to our app-private file.
+  await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
+    data: uri,
+    type: "application/pdf",
+    flags: 1,
+  });
+}
+
+export async function deletePdfFiles(entry: PdfDownloadEntry): Promise<void> {
+  await deleteAsync(entry.localUri, { idempotent: true });
+  if (entry.exportUri) {
+    // SAF providers may revoke delete permission later. The app-owned copy and
+    // metadata must still be removed even if the public export remains.
+    await deleteAsync(entry.exportUri, { idempotent: true }).catch(() => undefined);
+  }
 }
