@@ -15,7 +15,7 @@ import type {
   DownloadEntry,
   HistoryEntry,
   SavedEntry,
-} from "../library";
+} from "./library";
 
 type Tab = "saved" | "history" | "downloads";
 

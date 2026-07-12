@@ -4,13 +4,16 @@ import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { I18nextProvider, useTranslation } from "react-i18next";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { CategoryPicker } from "@/features/categories";
-import { LoadingScreen, PaperFeed, usePaperFeed } from "@/features/feed";
-import { LibraryScreen, useLibrary } from "@/features/library";
-import { SettingsScreen } from "@/features/settings";
-import { PaperViewer } from "@/features/viewer";
+import { CategoryPicker } from "@/features/categories/CategoryPicker";
+import { LoadingScreen } from "@/features/feed/LoadingScreen";
+import { PaperFeed } from "@/features/feed/PaperFeed";
+import { usePaperFeed } from "@/features/feed/usePaperFeed";
+import { LibraryScreen } from "@/features/library/LibraryScreen";
+import { useLibrary } from "@/features/library/useLibrary";
+import { SettingsScreen } from "@/features/settings/SettingsScreen";
+import { PaperViewer } from "@/features/viewer/PaperViewer";
 import i18n from "@/i18n";
-import { useAppPrefs } from "@/shared/hooks/useAppPrefs";
+import { useAppPrefs } from "@/shared/useAppPrefs";
 import type { Paper } from "@/types/paper";
 
 function AppInner() {

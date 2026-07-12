@@ -19,7 +19,7 @@ import {
 import {
   categoryGroupLabel,
   categoryLabel,
-} from "../categoryLabels";
+} from "./categoryLabels";
 
 type Props = {
   visible: boolean;

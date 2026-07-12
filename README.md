@@ -42,17 +42,18 @@ bun run typecheck
 Feature-first layout — find code by product area:
 
 ```
-App.tsx                 # thin shell: providers + compose features
+index.ts
 src/
+  App.tsx
   features/
-    feed/               # swipe feed, cards, prefetch hook
-    library/            # saved / history / downloads
-    viewer/             # HTML WebView reader
-    categories/         # picker UI + i18n labels
-    settings/           # language prefs
-  shared/hooks/         # cross-feature hooks (e.g. useAppPrefs)
-  lib/                  # arxiv client, rate limiter, prefs storage, taxonomy
-  i18n/                 # en / zh strings
+    feed/
+    library/
+    viewer/
+    categories/
+    settings/
+  shared/
+  lib/
+  i18n/
   types/
 ```
 
