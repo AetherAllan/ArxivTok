@@ -6,11 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/AndroidLogo.png",
     "userInterfaceStyle": "dark",
-    "splash": {
-      "image": "./assets/AndroidLogo.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0B1426"
-    },
     "android": {
       "package": "com.arxivtok.app",
       "versionCode": 2,
@@ -24,7 +19,16 @@
       "favicon": "./assets/AndroidLogo.png"
     },
     "plugins": [
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/AndroidLogo.png",
+          "backgroundColor": "#0B1426",
+          "imageWidth": 200,
+          "resizeMode": "contain"
+        }
+      ]
     ],
     "extra": {
       "eas": {

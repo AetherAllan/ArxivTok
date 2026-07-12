@@ -59,7 +59,7 @@ src/
 
 ## Release (Android APK)
 
-Tag a version matching `app.json` → CI builds an APK on EAS and attaches it to a GitHub Release.
+CI **only** runs on a `v*` git tag (or manual “Run workflow”), not on every push to `main`.
 
 1. Bump `version` in `app.json` and `package.json`
 2. One-time: add repo secret `EXPO_TOKEN` ([Expo access token](https://expo.dev/settings/access-tokens))
@@ -69,7 +69,7 @@ Tag a version matching `app.json` → CI builds an APK on EAS and attaches it to
 bunx eas-cli build -p android --profile production
 ```
 
-4. Tag and push the tag (not done by CI for you):
+4. Tag and push **the tag**:
 
 ```bash
 git tag v1.0.0
