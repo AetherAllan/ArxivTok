@@ -7,6 +7,8 @@ import {
   View,
   type LayoutChangeEvent,
 } from "react-native";
+import Menu from "lucide-react-native/icons/menu";
+import SlidersHorizontal from "lucide-react-native/icons/sliders-horizontal";
 import { useTranslation } from "react-i18next";
 import Animated, {
   runOnJS,
@@ -15,6 +17,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { categoriesSummary } from "@/features/categories/categoryLabels";
+import { colors, radii } from "@/shared/theme";
 import type { Paper } from "@/types/paper";
 import { LoadingScreen } from "./LoadingScreen";
 import { PaperCard } from "./PaperCard";
@@ -120,30 +123,44 @@ export function PaperFeed({
         onLayout={onHeaderLayout}
       >
         <Pressable onPress={onOpenCategories} style={styles.catBtn} hitSlop={8}>
-          <Text style={styles.catLabel} numberOfLines={1}>
-            {categoriesSummary(categories)}
-          </Text>
-          <Text style={styles.catHint}>
-            {categories.length > 1
-              ? t("common.selectedChange", { count: categories.length })
-              : t("common.change")}
-          </Text>
+          <View style={styles.catIcon}>
+            <SlidersHorizontal color={colors.text} size={18} strokeWidth={1.8} />
+          </View>
+          <View style={styles.catCopy}>
+            <Text style={styles.catLabel} numberOfLines={1}>
+              {categoriesSummary(categories)}
+            </Text>
+            <Text style={styles.catHint}>
+              {categories.length > 1
+                ? t("common.selectedChange", { count: categories.length })
+                : t("common.change")}
+            </Text>
+          </View>
         </Pressable>
         <View style={styles.headerRight}>
-          <Text style={styles.counter}>
-            {papers.length === 0 ? "—" : `${index + 1} / ${papers.length}`}
-          </Text>
-          {paginationStatus === "loading" ? (
-            <Text style={styles.pageStatus}>{t("common.loadingMore")}</Text>
-          ) : paginationStatus === "error" ? (
-            <Pressable onPress={onRetry} hitSlop={8} accessibilityHint={paginationError ?? undefined}>
-              <Text style={styles.pageError}>{t("common.retryMore")}</Text>
-            </Pressable>
-          ) : paginationStatus === "exhausted" ? (
-            <Text style={styles.pageStatus}>{t("common.endOfFeed")}</Text>
-          ) : null}
-          <Pressable onPress={onOpenMenu} hitSlop={8}>
-            <Text style={styles.settings}>{t("menu.title")}</Text>
+          <View style={styles.pageMeta}>
+            <Text style={styles.counter}>
+              {papers.length === 0 ? "—" : `${index + 1} / ${papers.length}`}
+            </Text>
+            {paginationStatus === "loading" ? (
+              <Text style={styles.pageStatus}>{t("common.loadingMore")}</Text>
+            ) : paginationStatus === "error" ? (
+              <Pressable onPress={onRetry} hitSlop={8} accessibilityHint={paginationError ?? undefined}>
+                <Text style={styles.pageError}>{t("common.retryMore")}</Text>
+              </Pressable>
+            ) : paginationStatus === "exhausted" ? (
+              <Text style={styles.pageStatus}>{t("common.endOfFeed")}</Text>
+            ) : null}
+          </View>
+          <Pressable
+            accessibilityLabel={t("menu.title")}
+            onPress={onOpenMenu}
+            style={({ pressed }) => [
+              styles.menuButton,
+              pressed && styles.menuButtonPressed,
+            ]}
+          >
+            <Menu color={colors.text} size={21} strokeWidth={1.8} />
           </Pressable>
         </View>
       </View>
@@ -190,7 +207,7 @@ export function PaperFeed({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#111113",
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: "row",
@@ -199,72 +216,94 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "#111113",
+    borderBottomColor: colors.border,
+    backgroundColor: colors.background,
   },
   catBtn: {
     flex: 1,
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
     marginRight: 12,
-    gap: 2,
   },
+  catIcon: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radii.medium,
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  catCopy: { flex: 1, gap: 2 },
   catLabel: {
-    color: "#f4f4f5",
+    color: colors.text,
     fontSize: 16,
     fontWeight: "600",
   },
   catHint: {
-    color: "#71717a",
+    color: colors.dim,
     fontSize: 12,
   },
   headerRight: {
-    alignItems: "flex-end",
-    gap: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
+  pageMeta: { alignItems: "flex-end", gap: 3 },
   counter: {
-    color: "#a1a1aa",
+    color: colors.muted,
     fontSize: 13,
     fontVariant: ["tabular-nums"],
   },
   pageStatus: {
-    color: "#71717a",
+    color: colors.dim,
     fontSize: 11,
   },
   pageError: {
-    color: "#f87171",
+    color: colors.danger,
     fontSize: 11,
     fontWeight: "600",
   },
-  settings: {
-    color: "#a1a1aa",
-    fontSize: 13,
-    fontWeight: "600",
+  menuButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radii.medium,
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
+  menuButtonPressed: { backgroundColor: colors.surfacePressed },
   center: {
     flex: 1,
-    backgroundColor: "#111113",
+    backgroundColor: colors.background,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 28,
   },
   errorTitle: {
-    color: "#f4f4f5",
+    color: colors.text,
     fontSize: 17,
     fontWeight: "600",
     marginBottom: 8,
   },
   errorBody: {
-    color: "#a1a1aa",
+    color: colors.muted,
     textAlign: "center",
     marginBottom: 20,
   },
   retry: {
-    backgroundColor: "#27272a",
+    backgroundColor: colors.surfacePressed,
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: radii.medium,
   },
   retryText: {
-    color: "#f4f4f5",
+    color: colors.text,
     fontWeight: "600",
   },
 });

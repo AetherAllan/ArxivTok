@@ -22,6 +22,7 @@ import {
 import { useProviderProfiles } from "@/features/settings/useProviderProfiles";
 import { PaperViewer } from "@/features/viewer/PaperViewer";
 import { useAppPrefs } from "@/shared/useAppPrefs";
+import { colors } from "@/shared/theme";
 import type { AppSection } from "@/types/navigation";
 import type { Paper } from "@/types/paper";
 import type { OfflineHtmlEntry, PdfDownloadEntry } from "@/features/library/library";
@@ -29,7 +30,6 @@ import type { OfflineHtmlEntry, PdfDownloadEntry } from "@/features/library/libr
 type ViewerState = {
   paper: Paper;
   sourceUri?: string;
-  returnTo?: AppSection;
 };
 
 export default function App() {
@@ -82,19 +82,20 @@ export default function App() {
   }, [libraryReady, visibleFeedPaper?.arxivId, recordHistory]);
 
   const openPaper = useCallback(
-    (paper: Paper, returnTo?: AppSection) => {
+    (paper: Paper) => {
       void recordHistory(paper);
-      if (returnTo) setActiveSection(null);
-      setViewer({ paper, returnTo });
+      // Keep the originating section mounted under the native viewer. This
+      // preserves its list and scroll position without a second navigation
+      // state that can drift out of sync.
+      setViewer({ paper });
     },
     [recordHistory],
   );
 
   const openOffline = useCallback(
-    (entry: OfflineHtmlEntry, returnTo?: AppSection) => {
+    (entry: OfflineHtmlEntry) => {
       void recordHistory(entry);
-      if (returnTo) setActiveSection(null);
-      setViewer({ paper: entry, sourceUri: entry.entryUri, returnTo });
+      setViewer({ paper: entry, sourceUri: entry.entryUri });
     },
     [recordHistory],
   );
@@ -111,10 +112,10 @@ export default function App() {
   );
 
   const onDownload = useCallback(
-    (paper: Paper, returnTo?: AppSection) => {
+    (paper: Paper) => {
       const offline = getOfflineHtml(paper.arxivId);
       if (offline) {
-        openOffline(offline, returnTo);
+        openOffline(offline);
         return;
       }
       Alert.alert(t("library.downloadChoiceTitle"), paper.title, [
@@ -123,7 +124,7 @@ export default function App() {
           text: t("library.downloadHtml"),
           onPress: () =>
             void downloadHtml(paper)
-              .then((entry) => openOffline(entry, returnTo))
+              .then(openOffline)
               .catch(showError),
         },
         {
@@ -218,10 +219,10 @@ export default function App() {
           onUnsave={unsave}
           onClearHistory={clearHistory}
           onOpenPaper={(paper) => {
-            openPaper(paper, librarySection);
+            openPaper(paper);
           }}
           onOpenOffline={(entry) => {
-            openOffline(entry, librarySection);
+            openOffline(entry);
           }}
           onOpenPdf={(entry) => void onOpenPdf(entry)}
           onDeleteDownloads={(arxivId) => void deleteDownloads(arxivId)}
@@ -233,9 +234,9 @@ export default function App() {
           isSaved={isSaved}
           hasOfflineHtml={hasOfflineHtml}
           hasPdf={hasPdf}
-          onRead={(paper) => openPaper(paper, "search")}
+          onRead={openPaper}
           onToggleSave={toggleSave}
-          onDownload={(paper) => onDownload(paper, "search")}
+          onDownload={onDownload}
           onBack={openMenu}
         />
         <SettingsScreen
@@ -251,11 +252,17 @@ export default function App() {
         />
         <AppMenu
           visible={menuOpen}
+          interactive={
+            menuOpen && activeSection === null && viewer === null && !pickerOpen
+          }
+          edgeEnabled={
+            !menuOpen && activeSection === null && viewer === null && !pickerOpen
+          }
+          onOpen={() => setMenuOpen(true)}
           onSelect={(section) => {
-            setMenuOpen(false);
             setActiveSection(section);
           }}
-          onClose={() => setMenuOpen(false)}
+          onCloseComplete={() => setMenuOpen(false)}
         />
         <PaperViewer
           paper={viewer?.paper ?? null}
@@ -265,12 +272,11 @@ export default function App() {
           getProviderApiKey={providerManager.getApiKey}
           onOpenSettings={() => {
             setViewer(null);
+            setMenuOpen(true);
             setActiveSection("translation");
           }}
           onClose={() => {
-            const returnTo = viewer?.returnTo;
             setViewer(null);
-            if (returnTo) setActiveSection(returnTo);
           }}
         />
       </GestureHandlerRootView>
@@ -281,6 +287,6 @@ export default function App() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#111113",
+    backgroundColor: colors.background,
   },
 });

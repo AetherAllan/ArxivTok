@@ -1,15 +1,19 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import {
   Alert,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import Bookmark from "lucide-react-native/icons/bookmark";
+import Clock3 from "lucide-react-native/icons/clock-3";
+import Download from "lucide-react-native/icons/download";
+import Trash2 from "lucide-react-native/icons/trash-2";
 import { useTranslation } from "react-i18next";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SectionFrame } from "@/features/menu/SectionFrame";
+import { colors } from "@/shared/theme";
 import type { AppSection } from "@/types/navigation";
 import type { Paper } from "@/types/paper";
 import type {
@@ -19,6 +23,7 @@ import type {
   PdfDownloadEntry,
   SavedEntry,
 } from "./library";
+import { LibraryRow } from "./LibraryRow";
 
 export type LibrarySection = Extract<
   AppSection,
@@ -55,7 +60,6 @@ export function LibraryScreen({
   onBack,
 }: Props) {
   const { t, i18n } = useTranslation();
-  const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const offsets = useRef<Record<LibrarySection, number>>({
     saved: 0,
@@ -78,6 +82,17 @@ export function LibraryScreen({
         ? "library.tabHistory"
         : "library.tabDownloads",
   );
+
+  useEffect(() => {
+    if (!visible) return;
+    const frame = requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        y: offsets.current[section],
+        animated: false,
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [section, visible]);
 
   const confirmClear = () => {
     Alert.alert(t("library.clearHistoryTitle"), t("library.clearHistoryBody"), [
@@ -107,31 +122,11 @@ export function LibraryScreen({
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      allowSwipeDismissal
-      onRequestClose={onBack}
-      onShow={() =>
-        scrollRef.current?.scrollTo({
-          y: offsets.current[section],
-          animated: false,
-        })
-      }
-    >
-      <View
-        style={[
-          styles.root,
-          { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 12 },
-        ]}
-      >
-        <View style={styles.header}>
-          <Text style={styles.title}>{title}</Text>
-        </View>
-
+    <SectionFrame visible={visible} title={title} onBackComplete={onBack}>
+      <View style={styles.root}>
         {section === "history" ? (
           <Pressable onPress={confirmClear} style={styles.clearRow}>
+            <Trash2 color={colors.danger} size={15} strokeWidth={1.8} />
             <Text style={styles.clearText}>{t("library.clearHistory")}</Text>
           </Pressable>
         ) : null}
@@ -147,10 +142,19 @@ export function LibraryScreen({
           }}
         >
           {items.length === 0 ? (
-            <Text style={styles.empty}>{emptyText}</Text>
+            <View style={styles.emptyState}>
+              {section === "saved" ? (
+                <Bookmark color={colors.dim} size={28} strokeWidth={1.4} />
+              ) : section === "history" ? (
+                <Clock3 color={colors.dim} size={28} strokeWidth={1.4} />
+              ) : (
+                <Download color={colors.dim} size={28} strokeWidth={1.4} />
+              )}
+              <Text style={styles.empty}>{emptyText}</Text>
+            </View>
           ) : (
             items.map((item) => (
-              <Row
+              <LibraryRow
                 key={item.arxivId}
                 title={item.title}
                 subtitle={item.authors.slice(0, 2).join(", ")}
@@ -184,7 +188,7 @@ export function LibraryScreen({
         </ScrollView>
 
       </View>
-    </Modal>
+    </SectionFrame>
   );
 }
 
@@ -201,49 +205,6 @@ function downloadMeta(item: DownloadSummary, locale: string): string {
   return `${kinds} · ${formatTime(entryTime(item), locale)}`;
 }
 
-function Row({
-  title,
-  subtitle,
-  meta,
-  onPress,
-  actionLabel,
-  onAction,
-}: {
-  title: string;
-  subtitle: string;
-  meta: string;
-  onPress: () => void;
-  actionLabel?: string;
-  onAction?: () => void;
-}) {
-  return (
-    <Pressable onPress={onPress} style={styles.row}>
-      <View style={styles.rowMain}>
-        <Text style={styles.rowTitle} numberOfLines={2}>
-          {title}
-        </Text>
-        {subtitle ? (
-          <Text style={styles.rowSub} numberOfLines={1}>
-            {subtitle}
-          </Text>
-        ) : null}
-        <Text style={styles.rowMeta}>{meta}</Text>
-      </View>
-      {actionLabel && onAction ? (
-        <Pressable
-          onPress={(e) => {
-            e.stopPropagation?.();
-            onAction();
-          }}
-          hitSlop={8}
-        >
-          <Text style={styles.rowAction}>{actionLabel}</Text>
-        </Pressable>
-      ) : null}
-    </Pressable>
-  );
-}
-
 function formatTime(ts: number, locale: string): string {
   return new Date(ts).toLocaleString(locale, {
     month: "short",
@@ -254,69 +215,29 @@ function formatTime(ts: number, locale: string): string {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#111113",
-  },
-  header: {
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingBottom: 10,
-  },
-  title: {
-    color: "#fafafa",
-    fontSize: 20,
-    fontWeight: "700",
-  },
+  root: { flex: 1 },
   clearRow: {
     alignSelf: "flex-end",
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingHorizontal: 20,
-    paddingVertical: 10,
   },
   clearText: {
-    color: "#f87171",
+    color: colors.danger,
     fontSize: 13,
     fontWeight: "600",
   },
   list: {
     paddingHorizontal: 16,
     paddingBottom: 24,
-    gap: 4,
+    gap: 9,
   },
+  emptyState: { alignItems: "center", gap: 12, marginTop: 48 },
   empty: {
-    color: "#71717a",
+    color: colors.dim,
     textAlign: "center",
-    marginTop: 48,
     fontSize: 14,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(255,255,255,0.08)",
-  },
-  rowMain: {
-    flex: 1,
-    gap: 3,
-  },
-  rowTitle: {
-    color: "#f4f4f5",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  rowSub: {
-    color: "#a1a1aa",
-    fontSize: 13,
-  },
-  rowMeta: {
-    color: "#71717a",
-    fontSize: 12,
-  },
-  rowAction: {
-    color: "#a1a1aa",
-    fontSize: 13,
   },
 });

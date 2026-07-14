@@ -1,144 +1,291 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect } from "react";
 import {
-  Animated,
-  Modal,
+  BackHandler,
   Pressable,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useTranslation } from "react-i18next";
+import Animated, {
+  Easing,
+  Extrapolation,
+  cancelAnimation,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { colors } from "@/shared/theme";
 import type { AppSection } from "@/types/navigation";
+import { AppMenuContent } from "./AppMenuContent";
+import {
+  drawerWidth,
+  EDGE_GESTURE_WIDTH,
+  shouldCompleteSwipe,
+} from "./navigationMotion";
 
 type Props = {
   visible: boolean;
+  interactive: boolean;
+  edgeEnabled: boolean;
+  onOpen: () => void;
   onSelect: (section: AppSection) => void;
-  onClose: () => void;
+  onCloseComplete: () => void;
 };
 
-const ITEMS: { id: AppSection; labelKey: string; separated?: boolean }[] = [
-  { id: "search", labelKey: "menu.search" },
-  { id: "saved", labelKey: "library.tabSaved" },
-  { id: "history", labelKey: "library.tabHistory" },
-  { id: "downloads", labelKey: "library.tabDownloads" },
-  { id: "translation", labelKey: "menu.translation", separated: true },
-  { id: "language", labelKey: "menu.language" },
-  { id: "about", labelKey: "settings.about" },
-];
+const DRAWER_SPRING = {
+  damping: 24,
+  stiffness: 260,
+  mass: 0.8,
+  overshootClamping: true,
+};
 
-export function AppMenu({ visible, onSelect, onClose }: Props) {
+export function AppMenu({
+  visible,
+  interactive,
+  edgeEnabled,
+  onOpen,
+  onSelect,
+  onCloseComplete,
+}: Props) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const panelWidth = Math.min(340, width * 0.84);
-  const slide = useRef(new Animated.Value(panelWidth)).current;
+  const panelWidth = drawerWidth(width);
+  const reduceMotion = useReducedMotion();
+  const translateX = useSharedValue(panelWidth);
+  const closing = useSharedValue(false);
 
   useEffect(() => {
     if (!visible) {
-      slide.stopAnimation();
-      slide.setValue(panelWidth);
+      cancelAnimation(translateX);
+      closing.value = false;
+      translateX.value = panelWidth;
       return;
     }
-    const animation = Animated.timing(slide, {
-      toValue: 0,
-      duration: 180,
-      useNativeDriver: true,
+    closing.value = false;
+    translateX.value = reduceMotion
+      ? 0
+      : withSpring(0, DRAWER_SPRING);
+  }, [closing, panelWidth, reduceMotion, translateX, visible]);
+
+  const finishClose = useCallback(() => {
+    onCloseComplete();
+  }, [onCloseComplete]);
+
+  const requestClose = useCallback(() => {
+    if (!visible || !interactive || closing.value) return;
+    closing.value = true;
+    cancelAnimation(translateX);
+    if (reduceMotion) {
+      translateX.value = panelWidth;
+      finishClose();
+      return;
+    }
+    translateX.value = withTiming(
+      panelWidth,
+      { duration: 180, easing: Easing.out(Easing.cubic) },
+      (finished) => {
+        if (finished) runOnJS(finishClose)();
+      },
+    );
+  }, [
+    closing,
+    finishClose,
+    interactive,
+    panelWidth,
+    reduceMotion,
+    translateX,
+    visible,
+  ]);
+
+  useEffect(() => {
+    if (!visible || !interactive) return;
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        requestClose();
+        return true;
+      },
+    );
+    return () => subscription.remove();
+  }, [interactive, requestClose, visible]);
+
+  const edgePan = Gesture.Pan()
+    .enabled(edgeEnabled && !visible)
+    .activeOffsetX(-6)
+    .failOffsetY([-12, 12])
+    .onStart(() => {
+      cancelAnimation(translateX);
+      translateX.value = panelWidth;
+    })
+    .onUpdate((event) => {
+      translateX.value = Math.min(
+        panelWidth,
+        Math.max(0, panelWidth + event.translationX),
+      );
+    })
+    .onEnd((event) => {
+      const opened = panelWidth - translateX.value;
+      if (
+        shouldCompleteSwipe(opened, panelWidth, -event.velocityX, 0.35)
+      ) {
+        translateX.value = reduceMotion ? 0 : withSpring(0, DRAWER_SPRING);
+        runOnJS(onOpen)();
+      } else {
+        translateX.value = reduceMotion
+          ? panelWidth
+          : withSpring(panelWidth, DRAWER_SPRING);
+      }
+    })
+    .onFinalize((_event, succeeded) => {
+      if (!succeeded) {
+        translateX.value = reduceMotion
+          ? panelWidth
+          : withSpring(panelWidth, DRAWER_SPRING);
+      }
     });
-    animation.start();
-    return () => animation.stop();
-  }, [panelWidth, slide, visible]);
+
+  const closePan = Gesture.Pan()
+    .enabled(visible && interactive)
+    .activeOffsetX(8)
+    .failOffsetY([-12, 12])
+    .onStart(() => {
+      cancelAnimation(translateX);
+      closing.value = false;
+    })
+    .onUpdate((event) => {
+      translateX.value = Math.min(
+        panelWidth,
+        Math.max(0, event.translationX),
+      );
+    })
+    .onEnd((event) => {
+      if (
+        shouldCompleteSwipe(
+          translateX.value,
+          panelWidth,
+          event.velocityX,
+          0.25,
+        )
+      ) {
+        closing.value = true;
+        if (reduceMotion) {
+          translateX.value = panelWidth;
+          runOnJS(finishClose)();
+        } else {
+          translateX.value = withTiming(
+            panelWidth,
+            { duration: 160, easing: Easing.out(Easing.cubic) },
+            (finished) => {
+              if (finished) runOnJS(finishClose)();
+            },
+          );
+        }
+      } else {
+        translateX.value = reduceMotion ? 0 : withSpring(0, DRAWER_SPRING);
+      }
+    })
+    .onFinalize((_event, succeeded) => {
+      if (!succeeded && !closing.value) {
+        translateX.value = reduceMotion ? 0 : withSpring(0, DRAWER_SPRING);
+      }
+    });
+
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      translateX.value,
+      [panelWidth, 0],
+      [0, 0.52],
+      Extrapolation.CLAMP,
+    ),
+  }));
+  const panelStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={onClose}
-    >
-      <View style={styles.overlay} accessibilityViewIsModal>
-        <Pressable
-          accessibilityLabel={t("common.closeMenu")}
-          onPress={onClose}
-          style={styles.backdrop}
-        />
-        <Animated.View
-          style={[
-            styles.panel,
-            {
-              width: panelWidth,
-              paddingTop: insets.top + 16,
-              paddingBottom: insets.bottom + 16,
-              transform: [{ translateX: slide }],
-            },
-          ]}
-        >
-          <View style={styles.header}>
-            <Text style={styles.title}>{t("menu.title")}</Text>
-            <Pressable onPress={onClose} hitSlop={12}>
-              <Text style={styles.close}>{t("common.done")}</Text>
-            </Pressable>
-          </View>
-          <View style={styles.items}>
-            {ITEMS.map((item) => (
-              <Pressable
-                key={item.id}
-                onPress={() => onSelect(item.id)}
-                style={[
-                  styles.item,
-                  item.separated && styles.itemSeparated,
-                ]}
-              >
-                <Text style={styles.itemText}>{t(item.labelKey)}</Text>
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
-            ))}
-          </View>
+    <View pointerEvents="box-none" style={styles.layer}>
+      {edgeEnabled && !visible ? (
+        <GestureDetector gesture={edgePan}>
+          <View style={styles.openEdge} />
+        </GestureDetector>
+      ) : null}
+
+      <View
+        accessibilityElementsHidden={!visible || !interactive}
+        accessibilityViewIsModal={visible && interactive}
+        importantForAccessibility={
+          visible && interactive ? "yes" : "no-hide-descendants"
+        }
+        pointerEvents={visible && interactive ? "auto" : "none"}
+        style={StyleSheet.absoluteFill}
+      >
+        <Animated.View style={[styles.backdrop, backdropStyle]}>
+          <Pressable
+            accessibilityLabel={t("common.closeMenu")}
+            onPress={requestClose}
+            style={StyleSheet.absoluteFill}
+          />
         </Animated.View>
+        <GestureDetector gesture={closePan}>
+          <Animated.View
+            style={[
+              styles.panel,
+              {
+                width: panelWidth,
+                paddingTop: insets.top + 18,
+                paddingBottom: insets.bottom + 16,
+              },
+              panelStyle,
+            ]}
+          >
+            <AppMenuContent onSelect={onSelect} />
+          </Animated.View>
+        </GestureDetector>
       </View>
-    </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    flexDirection: "row",
-    backgroundColor: "rgba(0,0,0,0.52)",
+  layer: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 20,
+    elevation: 20,
   },
-  backdrop: { flex: 1 },
+  openEdge: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: EDGE_GESTURE_WIDTH,
+  },
+  backdrop: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: "#000000",
+  },
   panel: {
-    backgroundColor: "#111113",
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.surface,
     borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: "rgba(255,255,255,0.12)",
+    borderLeftColor: colors.borderStrong,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 18,
-  },
-  title: { color: "#fafafa", fontSize: 20, fontWeight: "700" },
-  close: { color: "#a1a1aa", fontSize: 15, fontWeight: "600" },
-  items: { paddingHorizontal: 12 },
-  item: {
-    minHeight: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  itemSeparated: {
-    marginTop: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(255,255,255,0.1)",
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
-  },
-  itemText: { color: "#f4f4f5", fontSize: 16, fontWeight: "600" },
-  chevron: { color: "#71717a", fontSize: 24 },
 });

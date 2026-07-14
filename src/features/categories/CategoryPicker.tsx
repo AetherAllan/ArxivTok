@@ -8,6 +8,8 @@ import {
   TextInput,
   View,
 } from "react-native";
+import Check from "lucide-react-native/icons/check";
+import Search from "lucide-react-native/icons/search";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -16,6 +18,7 @@ import {
   normalizeCategories,
   type CategoryOption,
 } from "@/lib/categories";
+import { colors, radii } from "@/shared/theme";
 import {
   categoryGroupLabel,
   categoryLabel,
@@ -103,16 +106,19 @@ export function CategoryPicker({ visible, selected, onSelect, onClose }: Props) 
 
         <Text style={styles.hint}>{t("categories.hint")}</Text>
 
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder={t("categories.search")}
-          placeholderTextColor="#71717a"
-          autoCorrect={false}
-          autoCapitalize="none"
-          clearButtonMode="while-editing"
-          style={styles.search}
-        />
+        <View style={styles.searchShell}>
+          <Search color={colors.dim} size={18} strokeWidth={1.8} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t("categories.search")}
+            placeholderTextColor={colors.dim}
+            autoCorrect={false}
+            autoCapitalize="none"
+            clearButtonMode="while-editing"
+            style={styles.search}
+          />
+        </View>
 
         <ScrollView
           contentContainerStyle={styles.list}
@@ -139,7 +145,9 @@ export function CategoryPicker({ visible, selected, onSelect, onClose }: Props) 
                       >
                         {categoryLabel(item.id)}
                       </Text>
-                      {active ? <Text style={styles.check}>✓</Text> : null}
+                      {active ? (
+                        <Check color={colors.text} size={18} strokeWidth={2} />
+                      ) : null}
                     </Pressable>
                   );
                 })}
@@ -165,7 +173,7 @@ function groupBy(items: CategoryOption[]): [string, CategoryOption[]][] {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#111113",
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: "row",
@@ -175,7 +183,7 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   title: {
-    color: "#fafafa",
+    color: colors.text,
     fontSize: 20,
     fontWeight: "700",
   },
@@ -184,25 +192,34 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   closeText: {
-    color: "#a1a1aa",
+    color: colors.muted,
     fontSize: 16,
     fontWeight: "600",
   },
   hint: {
-    color: "#71717a",
+    color: colors.dim,
     fontSize: 13,
     lineHeight: 18,
     paddingHorizontal: 20,
     marginBottom: 10,
   },
-  search: {
+  searchShell: {
     marginHorizontal: 16,
     marginBottom: 12,
-    backgroundColor: "#1c1c1f",
-    borderRadius: 8,
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    backgroundColor: colors.surfaceRaised,
+    borderRadius: radii.medium,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     paddingHorizontal: 14,
+  },
+  search: {
+    flex: 1,
     paddingVertical: 12,
-    color: "#fafafa",
+    color: colors.text,
     fontSize: 15,
   },
   list: {
@@ -211,19 +228,25 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   empty: {
-    color: "#71717a",
+    color: colors.dim,
     textAlign: "center",
     marginTop: 32,
   },
   section: {
     gap: 2,
+    padding: 4,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: radii.medium,
   },
   group: {
-    color: "#71717a",
+    color: colors.dim,
     fontSize: 12,
     fontWeight: "600",
     marginBottom: 4,
-    marginLeft: 4,
+    marginHorizontal: 8,
+    marginTop: 8,
   },
   row: {
     flexDirection: "row",
@@ -231,23 +254,20 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 12,
     paddingVertical: 14,
-    borderRadius: 8,
+    minHeight: 48,
+    borderRadius: radii.small,
     gap: 10,
   },
   rowActive: {
-    backgroundColor: "#1c1c1f",
+    backgroundColor: colors.surfacePressed,
   },
   label: {
     flex: 1,
-    color: "#f4f4f5",
+    color: colors.textSecondary,
     fontSize: 15,
     fontWeight: "500",
   },
   labelActive: {
-    color: "#fafafa",
-  },
-  check: {
-    color: "#fafafa",
-    fontSize: 16,
+    color: colors.text,
   },
 });
