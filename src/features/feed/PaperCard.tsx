@@ -185,16 +185,6 @@ export function PaperCard({
       <View style={styles.actions}>
         <Pressable
           style={({ pressed }) => [
-            styles.readBtn,
-            pressed && styles.pressed,
-          ]}
-          onPress={() => onRead(paper)}
-        >
-          <BookOpen color={colors.inverse} size={18} strokeWidth={2} />
-          <Text style={styles.readBtnText}>{t("common.read")}</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [
             styles.secondaryBtn,
             saved && styles.secondaryBtnOn,
             pressed && styles.pressed,
@@ -211,6 +201,16 @@ export function PaperCard({
           >
             {saved ? t("common.saved") : t("common.save")}
           </Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [
+            styles.readBtn,
+            pressed && styles.pressed,
+          ]}
+          onPress={() => onRead(paper)}
+        >
+          <BookOpen color={colors.inverse} size={18} strokeWidth={2} />
+          <Text style={styles.readBtnText}>{t("common.read")}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [
