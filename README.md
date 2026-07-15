@@ -74,22 +74,37 @@ src/
 
 ## Release (Android APK)
 
-CI **only** runs on a `v*` git tag (or manual “Run workflow”), not on every push to `main`.
+Releases run only when started manually from GitHub Actions, not on every push to `main`.
 
-1. Bump `version` in `app.json` and `package.json`
-2. One-time: add repo secret `EXPO_TOKEN` ([Expo access token](https://expo.dev/settings/access-tokens))
-3. One-time (local, creates Android keystore on EAS if missing):
+One-time setup:
+
+1. Add repo secret `EXPO_TOKEN` ([Expo access token](https://expo.dev/settings/access-tokens)).
+2. Create the Android keystore on EAS if it does not exist:
 
 ```bash
 bunx eas-cli build -p android --profile production
 ```
 
-4. Tag and push **the tag**:
+3. Initialize EAS's remote Android `versionCode` from the latest completed
+   build. The latest known build used `4`, so enter `4` unless a newer build
+   exists in EAS:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+bunx eas-cli build:version:set -p android -e production
 ```
+
+To publish, open **Actions → Release APK → Run workflow** and choose one action:
+
+- `patch`: `1.0.1` → `1.0.2`
+- `minor`: `1.0.1` → `1.1.0`
+- `major`: `1.0.1` → `2.0.0`
+- `retry`: rebuild the current untagged version after a failed release
+
+The workflow tests the source, updates the single version in `package.json`,
+commits it to the default branch, builds on EAS, verifies every APK, and only
+then creates the matching Git tag and GitHub Release. Expo derives its
+user-facing version from `package.json`; EAS owns and increments Android's
+internal `versionCode`.
 
 Workflow: [`.github/workflows/release.yml`](.github/workflows/release.yml). A single EAS build produces four GitHub Release assets:
 

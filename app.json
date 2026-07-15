@@ -2,13 +2,11 @@
   "expo": {
     "name": "ArxivTok",
     "slug": "arxivtok",
-    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/AndroidLogo.png",
     "userInterfaceStyle": "dark",
     "android": {
       "package": "com.arxivtok.app",
-      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#0B1426",
         "foregroundImage": "./assets/AndroidLogo.png"

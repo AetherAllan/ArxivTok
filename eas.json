@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 16.0.0",
-    "appVersionSource": "local"
+    "appVersionSource": "remote"
   },
   "build": {
     "production": {
@@ -11,7 +11,7 @@
       "android": {
         "gradleCommand": ":app:assembleRelease",
         "applicationArchivePath": "android/app/build/outputs/apk/release/app-universal-release.apk",
-        "autoIncrement": "versionCode"
+        "autoIncrement": true
       }
     }
   }

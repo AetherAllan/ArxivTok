@@ -1,31 +1,86 @@
 name: Release APK
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
+    inputs:
+      bump:
+        description: Version change, or retry an untagged failed release
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - retry
 
 permissions:
   contents: write
+
+# A release pushes a version commit and consumes the next EAS versionCode.
+# Serializing runs prevents two manual clicks from publishing the same version.
+concurrency:
+  group: release-apk
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
 
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
 
-      - uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Verify source
+        run: |
+          bun test
+          bun test ./.github/scripts/release-version.test.js
+          bun run typecheck
+          git diff --exit-code
+
+      - name: Prepare release version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+          version=$(node .github/scripts/release-version.js "$BUMP")
+          tag="v$version"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Release tag already exists: $tag" >&2
+            exit 1
+          fi
+
+          resolved=$(bunx expo config --type public --json | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
+          if [[ "$resolved" != "$version" ]]; then
+            echo "Expo version mismatch: expected $version, got $resolved" >&2
+            exit 1
+          fi
+
+          if [[ "$BUMP" != "retry" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add package.json
+            git commit -m "chore: release $tag"
+            git push origin "HEAD:${{ github.event.repository.default_branch }}"
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: 21.0.0
+          token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Build Android APK on EAS
         id: build
@@ -39,13 +94,16 @@ jobs:
         run: |
           bash .github/scripts/prepare-apks.sh \
             "${{ steps.build.outputs.artifacts_url }}" \
-            "${GITHUB_REF_NAME}" \
+            "${{ steps.version.outputs.tag }}" \
             dist
 
+      # The immutable release tag is created only after every APK passes the
+      # signature, package, version, and ABI checks above.
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ steps.version.outputs.commit }}
           files: dist/*.apk
           generate_release_notes: true
         env:
