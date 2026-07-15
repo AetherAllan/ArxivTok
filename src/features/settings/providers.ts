@@ -9,8 +9,11 @@ import {
 } from "expo-file-system/legacy";
 import { enqueueStorageWrite } from "@/lib/storageQueue";
 import {
+  GOOGLE_PROFILE,
+  GOOGLE_PROFILE_ID,
   modelCatalogUrl,
   normalizeModels,
+  validateProfile,
   type ModelOption,
   type ProviderProfile,
 } from "./providerCore";
@@ -26,30 +29,48 @@ export type ProviderState = {
 
 function validProfiles(value: unknown): ProviderProfile[] {
   return Array.isArray(value)
-    ? value.filter(
-        (item): item is ProviderProfile =>
+    ? value
+        .filter(
+          (item): item is ProviderProfile =>
           !!item &&
           typeof item === "object" &&
           typeof item.id === "string" &&
           typeof item.name === "string" &&
-          (item.kind === "openrouter" || item.kind === "openai-compatible") &&
+          (item.kind === "openrouter" ||
+            item.kind === "openai-compatible") &&
           typeof item.baseUrl === "string" &&
           typeof item.model === "string",
-      )
+        )
+        // Persisted settings are an input boundary too. Never send a stored
+        // secret to a profile that no longer satisfies the HTTPS rules.
+        .filter((profile) => validateProfile(profile) === null)
     : [];
 }
 
 export async function loadProviderState(): Promise<ProviderState> {
-  const [rawProfiles, activeProfileId] = await Promise.all([
-    AsyncStorage.getItem(PROFILES_KEY),
-    AsyncStorage.getItem(ACTIVE_KEY),
-  ]);
+  let rawProfiles: string | null = null;
+  let activeProfileId: string | null = null;
+  try {
+    [rawProfiles, activeProfileId] = await Promise.all([
+      AsyncStorage.getItem(PROFILES_KEY),
+      AsyncStorage.getItem(ACTIVE_KEY),
+    ]);
+  } catch {
+    // Translation settings must never keep the rest of the app on its loading
+    // screen. The built-in Google profile remains a safe usable fallback.
+  }
   let profiles: ProviderProfile[] = [];
   try {
     profiles = validProfiles(JSON.parse(rawProfiles ?? "[]") as unknown);
   } catch {
     // A corrupt profile list should disable translation, not block app startup.
   }
+  // Google is a built-in, keyless option. Recreate it from code on every load
+  // so persisted data cannot change its fixed endpoint.
+  profiles = [
+    GOOGLE_PROFILE,
+    ...profiles.filter((profile) => profile.id !== GOOGLE_PROFILE_ID),
+  ];
   return {
     profiles,
     activeProfileId: profiles.some((profile) => profile.id === activeProfileId)
@@ -60,7 +81,12 @@ export async function loadProviderState(): Promise<ProviderState> {
 
 export async function persistProviderState(state: ProviderState): Promise<void> {
   await enqueueStorageWrite(async () => {
-    await AsyncStorage.setItem(PROFILES_KEY, JSON.stringify(state.profiles));
+    await AsyncStorage.setItem(
+      PROFILES_KEY,
+      JSON.stringify(
+        state.profiles.filter((profile) => profile.id !== GOOGLE_PROFILE_ID),
+      ),
+    );
     if (state.activeProfileId) {
       await AsyncStorage.setItem(ACTIVE_KEY, state.activeProfileId);
     } else {
@@ -108,8 +134,9 @@ async function readCatalogCache(
   profile: ProviderProfile,
 ): Promise<ModelOption[] | null> {
   const uri = catalogUri(profile.id);
-  if (!uri || !(await getInfoAsync(uri)).exists) return null;
+  if (!uri) return null;
   try {
+    if (!(await getInfoAsync(uri)).exists) return null;
     const cache = JSON.parse(await readAsStringAsync(uri)) as CatalogCache;
     return cache.endpoint === modelCatalogUrl(profile) &&
       Date.now() - cache.fetchedAt < CATALOG_TTL_MS
@@ -144,6 +171,7 @@ export async function fetchModelCatalog(
   apiKey: string | null,
   force = false,
 ): Promise<ModelOption[]> {
+  if (profile.kind === "google") return [];
   if (!force) {
     const cached = await readCatalogCache(profile);
     if (cached) return cached;
@@ -158,7 +186,9 @@ export async function fetchModelCatalog(
     if (!response.ok) throw new Error(`Model catalog HTTP ${response.status}`);
     const models = normalizeModels(await response.json(), profile.kind);
     if (models.length === 0) throw new Error("Provider returned no models");
-    await writeCatalogCache(profile, models);
+    // A catalog cache failure must not turn a successful provider response
+    // into a connection error in settings.
+    await writeCatalogCache(profile, models).catch(() => undefined);
     return models;
   } finally {
     clearTimeout(timeout);

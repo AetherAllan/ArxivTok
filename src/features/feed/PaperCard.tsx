@@ -32,7 +32,7 @@ type Props = {
   saved: boolean;
   downloading: boolean;
   canCancelDownload: boolean;
-  hasOfflineHtml: boolean;
+  hasOfflinePaper: boolean;
   hasPdf: boolean;
   onRead: (paper: Paper) => void;
   onToggleSave: (paper: Paper) => void;
@@ -54,7 +54,7 @@ export function PaperCard({
   saved,
   downloading,
   canCancelDownload,
-  hasOfflineHtml,
+  hasOfflinePaper,
   hasPdf,
   onRead,
   onToggleSave,
@@ -226,7 +226,7 @@ export function PaperCard({
         >
           {downloading && canCancelDownload ? (
             <X color={colors.textSecondary} size={17} strokeWidth={1.8} />
-          ) : hasOfflineHtml || hasPdf ? (
+          ) : hasOfflinePaper || hasPdf ? (
             <FileCheck color={colors.textSecondary} size={17} strokeWidth={1.8} />
           ) : (
             <Download color={colors.textSecondary} size={17} strokeWidth={1.8} />
@@ -236,7 +236,7 @@ export function PaperCard({
               ? canCancelDownload
                 ? t("common.cancel")
                 : t("common.downloading")
-              : hasOfflineHtml
+              : hasOfflinePaper
                 ? t("common.offlineRead")
                 : hasPdf
                   ? t("common.pdfSaved")

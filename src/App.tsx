@@ -25,7 +25,7 @@ import { useAppPrefs } from "@/shared/useAppPrefs";
 import { colors } from "@/shared/theme";
 import type { AppSection } from "@/types/navigation";
 import type { Paper } from "@/types/paper";
-import type { OfflineHtmlEntry, PdfDownloadEntry } from "@/features/library/library";
+import type { OfflinePaperEntry, PdfDownloadEntry } from "@/features/library/library";
 
 type ViewerState = {
   paper: Paper;
@@ -56,14 +56,14 @@ export default function App() {
     downloadingId,
     canCancelDownload,
     isSaved,
-    hasOfflineHtml,
+    hasOfflinePaper,
     hasPdf,
-    getOfflineHtml,
+    getOfflinePaper,
     toggleSave,
     unsave,
     recordHistory,
     clearHistory,
-    downloadHtml,
+    downloadOffline,
     downloadPdf,
     openPdf,
     deleteDownloads,
@@ -93,7 +93,7 @@ export default function App() {
   );
 
   const openOffline = useCallback(
-    (entry: OfflineHtmlEntry) => {
+    (entry: OfflinePaperEntry) => {
       void recordHistory(entry);
       setViewer({ paper: entry, sourceUri: entry.entryUri });
     },
@@ -113,7 +113,7 @@ export default function App() {
 
   const onDownload = useCallback(
     (paper: Paper) => {
-      const offline = getOfflineHtml(paper.arxivId);
+      const offline = getOfflinePaper(paper.arxivId);
       if (offline) {
         openOffline(offline);
         return;
@@ -121,9 +121,9 @@ export default function App() {
       Alert.alert(t("library.downloadChoiceTitle"), paper.title, [
         { text: t("common.cancel"), style: "cancel" },
         {
-          text: t("library.downloadHtml"),
+          text: t("library.downloadOffline"),
           onPress: () =>
-            void downloadHtml(paper)
+            void downloadOffline(paper)
               .then(openOffline)
               .catch(showError),
         },
@@ -133,7 +133,7 @@ export default function App() {
         },
       ]);
     },
-    [downloadHtml, downloadPdf, getOfflineHtml, openOffline, showError, t],
+    [downloadOffline, downloadPdf, getOfflinePaper, openOffline, showError, t],
   );
 
   const openMenu = useCallback(() => {
@@ -196,7 +196,7 @@ export default function App() {
           onOpenMenu={() => setMenuOpen(true)}
           onRead={openPaper}
           isSaved={isSaved}
-          hasOfflineHtml={hasOfflineHtml}
+          hasOfflinePaper={hasOfflinePaper}
           hasPdf={hasPdf}
           downloadingId={downloadingId}
           canCancelDownload={canCancelDownload}
@@ -232,7 +232,7 @@ export default function App() {
           visible={activeSection === "search"}
           categories={prefs.categories}
           isSaved={isSaved}
-          hasOfflineHtml={hasOfflineHtml}
+          hasOfflinePaper={hasOfflinePaper}
           hasPdf={hasPdf}
           onRead={openPaper}
           onToggleSave={toggleSave}

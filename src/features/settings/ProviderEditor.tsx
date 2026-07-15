@@ -205,6 +205,7 @@ export function ProviderEditor({
                     <View style={styles.modelMain}>
                       <Text style={styles.modelName} numberOfLines={1}>
                         {model.name}
+                        {model.free ? ` · ${t("provider.free")}` : ""}
                       </Text>
                       <Text style={styles.modelId} numberOfLines={1}>
                         {model.id}

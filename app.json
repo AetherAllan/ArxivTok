@@ -30,6 +30,12 @@
         }
       ],
       "expo-secure-store",
+      [
+        "react-native-enriched-markdown",
+        {
+          "enableMath": true
+        }
+      ],
       "./plugins/withAbiSplits"
     ],
     "extra": {

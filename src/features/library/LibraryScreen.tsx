@@ -19,7 +19,7 @@ import type { Paper } from "@/types/paper";
 import type {
   DownloadSummary,
   HistoryEntry,
-  OfflineHtmlEntry,
+  OfflinePaperEntry,
   PdfDownloadEntry,
   SavedEntry,
 } from "./library";
@@ -39,7 +39,7 @@ type Props = {
   onUnsave: (arxivId: string) => void;
   onClearHistory: () => void;
   onOpenPaper: (paper: Paper) => void;
-  onOpenOffline: (entry: OfflineHtmlEntry) => void;
+  onOpenOffline: (entry: OfflinePaperEntry) => void;
   onOpenPdf: (entry: PdfDownloadEntry) => void;
   onDeleteDownloads: (arxivId: string) => void;
   onBack: () => void;
@@ -106,7 +106,7 @@ export function LibraryScreen({
   };
 
   const openDownload = (item: DownloadSummary) => {
-    if (item.html) onOpenOffline(item.html);
+    if (item.offline) onOpenOffline(item.offline);
     else if (item.pdf) onOpenPdf(item.pdf);
   };
 
@@ -160,7 +160,11 @@ export function LibraryScreen({
                 subtitle={item.authors.slice(0, 2).join(", ")}
                 meta={
                   section === "downloads"
-                    ? downloadMeta(item as DownloadSummary, locale)
+                    ? downloadMeta(
+                        item as DownloadSummary,
+                        locale,
+                        t("library.readerPackage"),
+                      )
                     : formatTime(entryTime(item), locale)
                 }
                 onPress={() =>
@@ -195,11 +199,15 @@ export function LibraryScreen({
 function entryTime(item: SavedEntry | HistoryEntry | DownloadSummary): number {
   if ("savedAt" in item) return item.savedAt;
   if ("viewedAt" in item) return item.viewedAt;
-  return Math.max(item.html?.downloadedAt ?? 0, item.pdf?.downloadedAt ?? 0);
+  return Math.max(item.offline?.downloadedAt ?? 0, item.pdf?.downloadedAt ?? 0);
 }
 
-function downloadMeta(item: DownloadSummary, locale: string): string {
-  const kinds = [item.html ? "HTML" : null, item.pdf ? "PDF" : null]
+function downloadMeta(
+  item: DownloadSummary,
+  locale: string,
+  readerLabel: string,
+): string {
+  const kinds = [item.offline ? readerLabel : null, item.pdf ? "PDF" : null]
     .filter(Boolean)
     .join(" + ");
   return `${kinds} · ${formatTime(entryTime(item), locale)}`;

@@ -21,7 +21,7 @@ type Props = {
   visible: boolean;
   categories: string[];
   isSaved: (arxivId: string) => boolean;
-  hasOfflineHtml: (arxivId: string) => boolean;
+  hasOfflinePaper: (arxivId: string) => boolean;
   hasPdf: (arxivId: string) => boolean;
   onRead: (paper: Paper) => void;
   onToggleSave: (paper: Paper) => void;
@@ -33,7 +33,7 @@ export function SearchScreen({
   visible,
   categories,
   isSaved,
-  hasOfflineHtml,
+  hasOfflinePaper,
   hasPdf,
   onRead,
   onToggleSave,
@@ -165,7 +165,7 @@ export function SearchScreen({
               <SearchResultRow
                 paper={item}
                 saved={isSaved(item.arxivId)}
-                downloaded={hasOfflineHtml(item.arxivId) || hasPdf(item.arxivId)}
+                downloaded={hasOfflinePaper(item.arxivId) || hasPdf(item.arxivId)}
                 onRead={onRead}
                 onToggleSave={onToggleSave}
                 onDownload={onDownload}

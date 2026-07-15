@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Paper } from "@/types/paper";
 import { deletePdfFiles, downloadPaperPdf, openPdf } from "./downloads";
-import { deleteOfflineHtmlPackage, downloadOfflineHtml } from "./offlineHtml";
+import {
+  deleteOfflinePaperPackage,
+  downloadOfflinePaper,
+} from "./offlinePaper";
 import {
   loadHistory,
-  loadOfflineHtml,
+  loadOfflinePapers,
   loadPdfDownloads,
   loadSaved,
   persistHistory,
-  persistOfflineHtml,
+  persistOfflinePapers,
   persistPdfDownloads,
   persistSaved,
   removeSaved,
@@ -16,7 +19,7 @@ import {
   upsertByArxivId,
   upsertHistory,
   upsertSaved,
-  type OfflineHtmlEntry,
+  type OfflinePaperEntry,
   type PdfDownloadEntry,
   type HistoryEntry,
   type SavedEntry,
@@ -25,12 +28,12 @@ import {
 export function useLibrary() {
   const [saved, setSaved] = useState<SavedEntry[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [offlineHtml, setOfflineHtml] = useState<OfflineHtmlEntry[]>([]);
+  const [offlinePapers, setOfflinePapers] = useState<OfflinePaperEntry[]>([]);
   const [pdfDownloads, setPdfDownloads] = useState<PdfDownloadEntry[]>([]);
   const [ready, setReady] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [downloadingKind, setDownloadingKind] = useState<"html" | "pdf" | null>(null);
-  const htmlDownloadController = useRef<AbortController | null>(null);
+  const [downloadingKind, setDownloadingKind] = useState<"reader" | "pdf" | null>(null);
+  const offlineDownloadController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,13 +41,13 @@ export function useLibrary() {
       const [savedRows, historyRows, htmlRows, pdfRows] = await Promise.all([
         loadSaved(),
         loadHistory(),
-        loadOfflineHtml(),
+        loadOfflinePapers(),
         loadPdfDownloads(),
       ]);
       if (cancelled) return;
       setSaved(savedRows);
       setHistory(historyRows);
-      setOfflineHtml(htmlRows);
+      setOfflinePapers(htmlRows);
       setPdfDownloads(pdfRows);
       setReady(true);
     })();
@@ -57,17 +60,17 @@ export function useLibrary() {
     () => new Set(saved.map((paper) => paper.arxivId)),
     [saved],
   );
-  const htmlById = useMemo(
-    () => new Map(offlineHtml.map((entry) => [entry.arxivId, entry])),
-    [offlineHtml],
+  const offlineById = useMemo(
+    () => new Map(offlinePapers.map((entry) => [entry.arxivId, entry])),
+    [offlinePapers],
   );
   const pdfById = useMemo(
     () => new Map(pdfDownloads.map((entry) => [entry.arxivId, entry])),
     [pdfDownloads],
   );
   const downloads = useMemo(
-    () => summarizeDownloads(offlineHtml, pdfDownloads),
-    [offlineHtml, pdfDownloads],
+    () => summarizeDownloads(offlinePapers, pdfDownloads),
+    [offlinePapers, pdfDownloads],
   );
 
   const toggleSave = useCallback(async (paper: Paper) => {
@@ -101,21 +104,21 @@ export function useLibrary() {
     await persistHistory([]);
   }, []);
 
-  const downloadHtml = useCallback(async (paper: Paper) => {
+  const downloadOffline = useCallback(async (paper: Paper) => {
     const controller = new AbortController();
-    htmlDownloadController.current = controller;
+    offlineDownloadController.current = controller;
     setDownloadingId(paper.arxivId);
-    setDownloadingKind("html");
+    setDownloadingKind("reader");
     try {
-      const entry = await downloadOfflineHtml(paper, controller.signal);
-      setOfflineHtml((previous) => {
+      const entry = await downloadOfflinePaper(paper, controller.signal);
+      setOfflinePapers((previous) => {
         const next = upsertByArxivId(previous, entry);
-        void persistOfflineHtml(next);
+        void persistOfflinePapers(next);
         return next;
       });
       return entry;
     } finally {
-      htmlDownloadController.current = null;
+      offlineDownloadController.current = null;
       setDownloadingId(null);
       setDownloadingKind(null);
     }
@@ -138,25 +141,25 @@ export function useLibrary() {
     }
   }, []);
 
-  const deleteHtml = useCallback(async (arxivId: string) => {
-    const entry = htmlById.get(arxivId);
+  const deleteOffline = useCallback(async (arxivId: string) => {
+    const entry = offlineById.get(arxivId);
     if (!entry) return;
-    await deleteOfflineHtmlPackage(entry);
-    setOfflineHtml((previous) => {
+    await deleteOfflinePaperPackage(entry);
+    setOfflinePapers((previous) => {
       const next = previous.filter((item) => item.arxivId !== arxivId);
-      void persistOfflineHtml(next);
+      void persistOfflinePapers(next);
       return next;
     });
-  }, [htmlById]);
+  }, [offlineById]);
 
   const deleteDownloads = useCallback(async (arxivId: string) => {
-    const htmlEntry = htmlById.get(arxivId);
+    const offlineEntry = offlineById.get(arxivId);
     const pdfEntry = pdfById.get(arxivId);
-    if (htmlEntry) await deleteOfflineHtmlPackage(htmlEntry);
+    if (offlineEntry) await deleteOfflinePaperPackage(offlineEntry);
     if (pdfEntry) await deletePdfFiles(pdfEntry);
-    setOfflineHtml((previous) => {
+    setOfflinePapers((previous) => {
       const next = previous.filter((item) => item.arxivId !== arxivId);
-      void persistOfflineHtml(next);
+      void persistOfflinePapers(next);
       return next;
     });
     setPdfDownloads((previous) => {
@@ -164,31 +167,31 @@ export function useLibrary() {
       void persistPdfDownloads(next);
       return next;
     });
-  }, [htmlById, pdfById]);
+  }, [offlineById, pdfById]);
 
   return {
     ready,
     saved,
     history,
     downloads,
-    offlineHtml,
+    offlinePapers,
     pdfDownloads,
     downloadingId,
-    canCancelDownload: downloadingKind === "html",
+    canCancelDownload: downloadingKind === "reader",
     isSaved: (arxivId: string) => savedIds.has(arxivId),
-    hasOfflineHtml: (arxivId: string) => htmlById.has(arxivId),
+    hasOfflinePaper: (arxivId: string) => offlineById.has(arxivId),
     hasPdf: (arxivId: string) => pdfById.has(arxivId),
-    getOfflineHtml: (arxivId: string) => htmlById.get(arxivId),
+    getOfflinePaper: (arxivId: string) => offlineById.get(arxivId),
     getPdf: (arxivId: string) => pdfById.get(arxivId),
     toggleSave,
     unsave,
     recordHistory,
     clearHistory,
-    downloadHtml,
+    downloadOffline,
     downloadPdf,
     openPdf,
-    deleteHtml,
+    deleteOffline,
     deleteDownloads,
-    cancelDownload: () => htmlDownloadController.current?.abort(),
+    cancelDownload: () => offlineDownloadController.current?.abort(),
   };
 }

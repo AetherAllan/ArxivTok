@@ -11,9 +11,9 @@ TikTok-style vertical feed for [arXiv](https://arxiv.org) papers. **Android-firs
 - Vertical swipe through paper cards (title, authors, abstract)
 - Category multi-select (**AND** intersection on the API query)
 - Online arXiv search across all papers or the current category selection
-- Online and packaged offline HTML reader with lazy in-page bilingual translation
-- BYOK OpenRouter / OpenAI-compatible profiles; keys use encrypted device storage
-- Library: saved, history, offline HTML, and PDF downloads (app storage + Android SAF)
+- Native paper reader parsed from arXiv HTML, with selectable text, math, tables, figures, and contents navigation
+- Lazy context-aware bilingual translation through keyless Google or BYOK OpenRouter / OpenAI-compatible profiles
+- Library: saved, history, offline reader packages, and PDF downloads (app storage + Android SAF)
 - UI languages: English / 中文 (follows system or manual)
 
 ## How it works
@@ -24,14 +24,25 @@ TikTok-style vertical feed for [arXiv](https://arxiv.org) papers. **Android-firs
 
 ## Run
 
-Requires [Bun](https://bun.sh) and an Android device/emulator with network access to `export.arxiv.org`.
+Requires [Bun](https://bun.sh), Android native build tools, and a device/emulator with network access to arXiv. The reader uses a native Markdown renderer, so Expo Go is not supported.
 
 ```bash
 bun install
-bun run dev
-# then press `a`, or:
 bun run android
 ```
+
+`bun run android` builds and installs the ArxivTok development client. After
+that, use `bun run dev` for normal JavaScript/TypeScript changes.
+
+When a native dependency or `app.json` changes, rebuild the native client:
+
+```bash
+bunx expo prebuild --clean
+bun run android
+```
+
+Starting Metro or scanning a QR code does not add native modules to an already
+installed client. See Expo's [development build guide](https://docs.expo.dev/develop/development-builds/expo-go-to-dev-build/).
 
 Checks:
 
@@ -93,7 +104,7 @@ Planned work lives in [`Roadmap/`](Roadmap/):
 
 | Doc | Topic |
 |-----|--------|
-| [immersive-translation.md](Roadmap/immersive-translation.md) | In-WebView bilingual translation (Immersive Translate–style); multi-engine, no Google proxy |
+| [immersive-translation.md](Roadmap/immersive-translation.md) | Native bilingual reader architecture and translation behavior |
 | [release.md](Roadmap/release.md) | ABI-specific APKs and release artifact verification |
 
 ## License

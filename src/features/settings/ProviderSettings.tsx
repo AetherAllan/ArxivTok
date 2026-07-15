@@ -11,8 +11,8 @@ import Plus from "lucide-react-native/icons/plus";
 import { useTranslation } from "react-i18next";
 import { colors, radii } from "@/shared/theme";
 import {
+  GOOGLE_PROFILE_ID,
   OPENROUTER_BASE_URL,
-  type ProviderKind,
   type ProviderProfile,
 } from "./providerCore";
 import { ProviderEditor } from "./ProviderEditor";
@@ -27,7 +27,7 @@ export function ProviderSettings({ manager }: Props) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState<ProviderProfile | null>(null);
 
-  const create = (kind: ProviderKind) => {
+  const create = (kind: "openrouter" | "openai-compatible") => {
     setDraft({
       id: createProfileId(),
       name: kind === "openrouter" ? "OpenRouter" : t("provider.compatible"),
@@ -57,14 +57,16 @@ export function ProviderSettings({ manager }: Props) {
               {profile.model || t("provider.noModel")}
             </Text>
           </Pressable>
-          <Pressable
-            accessibilityLabel={t("provider.edit")}
-            onPress={() => setDraft(profile)}
-            hitSlop={8}
-            style={styles.iconButton}
-          >
-            <Pencil color={colors.muted} size={16} strokeWidth={1.8} />
-          </Pressable>
+          {profile.id !== GOOGLE_PROFILE_ID ? (
+            <Pressable
+              accessibilityLabel={t("provider.edit")}
+              onPress={() => setDraft(profile)}
+              hitSlop={8}
+              style={styles.iconButton}
+            >
+              <Pencil color={colors.muted} size={16} strokeWidth={1.8} />
+            </Pressable>
+          ) : null}
         </View>
       ))}
       <View style={styles.addRow}>

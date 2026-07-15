@@ -30,12 +30,23 @@ describe("provider configuration", () => {
     const payload = {
       data: [
         { id: "paid/model", name: "Paid", pricing: { prompt: "0.1" } },
+        { id: "unknown/model", name: "Unknown" },
         { id: "free/model:free", name: "Free", pricing: { prompt: "0" } },
+        {
+          id: "image/model:free",
+          name: "Image only",
+          pricing: { prompt: "0", completion: "0" },
+          architecture: {
+            input_modalities: ["text"],
+            output_modalities: ["image"],
+          },
+        },
       ],
     };
     expect(normalizeModels(payload, "openrouter").map((model) => model.id)).toEqual([
       "free/model:free",
       "paid/model",
+      "unknown/model",
     ]);
     expect(normalizeModels(payload, "openai-compatible").every((model) => !model.free)).toBe(true);
   });

@@ -23,7 +23,7 @@ mock.module("expo-file-system/legacy", () => ({
   writeAsStringAsync: async () => undefined,
 }));
 
-const { persistProviderState, setProviderApiKey } = await import("./providers");
+const { loadProviderState, persistProviderState, setProviderApiKey } = await import("./providers");
 
 describe("provider secret ownership", () => {
   beforeEach(() => {
@@ -48,5 +48,43 @@ describe("provider secret ownership", () => {
 
     expect([...secureValues.values()]).toEqual(["secret-value"]);
     expect([...asyncValues.values()].join(" ")).not.toContain("secret-value");
+  });
+
+  test("recreates the fixed Google profile instead of trusting stored data", async () => {
+    asyncValues.set(
+      "arxivtok.providerProfiles",
+      JSON.stringify([
+        {
+          id: "fake-google",
+          name: "Changed endpoint",
+          kind: "google",
+          baseUrl: "https://example.com",
+          model: "fake",
+        },
+      ]),
+    );
+    const state = await loadProviderState();
+    expect(state.profiles).toHaveLength(1);
+    expect(state.profiles[0]).toMatchObject({
+      id: "google-web",
+      baseUrl: "https://translate.googleapis.com",
+    });
+  });
+
+  test("drops a persisted provider that would send a key over HTTP", async () => {
+    asyncValues.set(
+      "arxivtok.providerProfiles",
+      JSON.stringify([
+        {
+          id: "unsafe",
+          name: "Unsafe",
+          kind: "openai-compatible",
+          baseUrl: "http://example.com/v1",
+          model: "model",
+        },
+      ]),
+    );
+    const state = await loadProviderState();
+    expect(state.profiles.map((profile) => profile.id)).toEqual(["google-web"]);
   });
 });

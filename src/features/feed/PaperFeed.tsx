@@ -46,7 +46,7 @@ type Props = {
   onOpenMenu: () => void;
   onRead: (paper: Paper) => void;
   isSaved: (arxivId: string) => boolean;
-  hasOfflineHtml: (arxivId: string) => boolean;
+  hasOfflinePaper: (arxivId: string) => boolean;
   hasPdf: (arxivId: string) => boolean;
   downloadingId: string | null;
   canCancelDownload: boolean;
@@ -69,7 +69,7 @@ export function PaperFeed({
   onOpenMenu,
   onRead,
   isSaved,
-  hasOfflineHtml,
+  hasOfflinePaper,
   hasPdf,
   downloadingId,
   canCancelDownload,
@@ -266,7 +266,7 @@ export function PaperFeed({
             paper={item}
             height={pageHeight}
             saved={isSaved(item.arxivId)}
-            hasOfflineHtml={hasOfflineHtml(item.arxivId)}
+            hasOfflinePaper={hasOfflinePaper(item.arxivId)}
             hasPdf={hasPdf(item.arxivId)}
             downloading={downloadingId === item.arxivId}
             canCancelDownload={canCancelDownload}

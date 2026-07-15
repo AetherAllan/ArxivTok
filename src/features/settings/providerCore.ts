@@ -1,4 +1,4 @@
-export type ProviderKind = "openrouter" | "openai-compatible";
+export type ProviderKind = "google" | "openrouter" | "openai-compatible";
 
 export type ProviderProfile = {
   id: string;
@@ -16,12 +16,24 @@ export type ModelOption = {
 };
 
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+export const GOOGLE_TRANSLATE_BASE_URL = "https://translate.googleapis.com";
+export const GOOGLE_PROFILE_ID = "google-web";
+export const GOOGLE_PROFILE: ProviderProfile = {
+  id: GOOGLE_PROFILE_ID,
+  name: "Google Translate",
+  kind: "google",
+  baseUrl: GOOGLE_TRANSLATE_BASE_URL,
+  model: "google-web",
+};
 
 export function normalizeBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, "");
 }
 
 export function validateProfile(profile: ProviderProfile): string | null {
+  if (profile.kind === "google") {
+    return profile.id === GOOGLE_PROFILE_ID ? null : "Google profile is built in";
+  }
   if (!profile.name.trim()) return "Profile name is required";
   if (!profile.model.trim()) return "Model is required";
   const baseUrl = normalizeBaseUrl(profile.baseUrl);
@@ -50,10 +62,26 @@ export function normalizeModels(payload: unknown, kind: ProviderKind): ModelOpti
     const row = raw as Record<string, unknown>;
     const id = text(row.id);
     if (!id) continue;
+    if (kind === "openrouter") {
+      const architecture = row.architecture as Record<string, unknown> | undefined;
+      const input = architecture?.input_modalities;
+      const output = architecture?.output_modalities;
+      // The catalog also contains image, audio, and safety-only models. They
+      // are valid OpenRouter products but cannot satisfy this text reader.
+      if (
+        (Array.isArray(input) && !input.includes("text")) ||
+        (Array.isArray(output) &&
+          (output.length !== 1 || output[0] !== "text"))
+      ) {
+        continue;
+      }
+    }
     const pricing = row.pricing as Record<string, unknown> | undefined;
-    const zeroPrice = ["prompt", "completion", "request"].every(
-      (key) => pricing?.[key] === undefined || Number(pricing[key]) === 0,
-    );
+    const zeroPrice =
+      !!pricing &&
+      ["prompt", "completion"].every(
+        (key) => pricing[key] !== undefined && Number(pricing[key]) === 0,
+      );
     result.push({
       id,
       name: text(row.name) ?? id,
@@ -75,6 +103,7 @@ export function searchModels(models: ModelOption[], query: string): ModelOption[
 }
 
 export function modelCatalogUrl(profile: ProviderProfile): string {
+  if (profile.kind === "google") throw new Error("Google has no model catalog");
   const base = normalizeBaseUrl(profile.baseUrl);
   return profile.kind === "openrouter"
     ? `${base}/models?sort=most-popular`
@@ -82,5 +111,6 @@ export function modelCatalogUrl(profile: ProviderProfile): string {
 }
 
 export function chatCompletionsUrl(profile: ProviderProfile): string {
+  if (profile.kind === "google") throw new Error("Google does not use chat completions");
   return `${normalizeBaseUrl(profile.baseUrl)}/chat/completions`;
 }

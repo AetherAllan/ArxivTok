@@ -1,155 +1,43 @@
-# Immersive translation in the HTML reader
+# Native immersive reader
 
-Replace the current Google URL proxy with in-page bilingual translation, inspired by [Immersive Translate](https://immersivetranslate.com/).
+ArxivTok fetches `https://arxiv.org/html/{id}`, parses the LaTeXML HTML into its own versioned `PaperDocument`, and renders native React Native views. Remote paper HTML is treated as data; no script or page code is executed.
 
-## Current state
+## Data flow
 
-[`PaperViewer.tsx`](../src/features/viewer/PaperViewer.tsx) toggles between:
+1. `paperSource.ts` downloads a bounded HTML response through the shared arXiv rate limiter.
+2. `arxivHtmlParser.ts` extracts stable blocks: headings, paragraphs, lists, quotes, equations, tables, figures, and code.
+3. Inline formulas and link targets become protected markers before translation, then are restored only when every marker survives exactly once.
+4. `PaperViewer.tsx` virtualizes blocks and requests visible translations plus a small forward window.
+5. Offline downloads store `document.json` and referenced figures only. Version-1 HTML packages are parsed locally for backward compatibility.
 
-- Original: `https://arxiv.org/html/{id}`
-- “Translated”: `https://translate.google.com/translate?u=...`
+## Translation behavior
 
-Problems: whole-page proxy, layout/math breakage, SSL issues, uneven quality, no engine choice.
+- Modes: source, bilingual, and translation-only.
+- Paragraphs are the smallest translation unit; batches never cross section boundaries.
+- Each request includes the paper title, current section, and a short previous-paragraph context. Context is not repeated per block.
+- Requests are capped by characters and output tokens. Cache identity includes the paper revision, parsed source hash, target language, provider, endpoint, and model.
+- Google is a built-in keyless option. OpenRouter and OpenAI-compatible services use user-supplied keys kept in encrypted device storage.
+- Formulas, Markdown structure, and link destinations must survive translation unchanged.
 
-## Target experience
+## Reader guarantees
 
-1. WebView always loads the **original** arXiv HTML.
-2. User taps **Translate** → translations are **injected into the DOM** (not a redirect).
-3. Default display: **dual mode** — original paragraph above, translation below (Immersive Translate style).
-4. Multiple named OpenRouter / OpenAI-compatible profiles; user supplies the API key.
-5. **No backend** — device calls translation APIs directly (BYOK for premium engines).
+- Native text selection and accessibility semantics.
+- Native LaTeX rendering; no WebView fallback.
+- Internal table-of-contents links scroll to parsed block anchors.
+- Unsupported or unavailable arXiv HTML shows explicit retry, PDF, and arXiv fallbacks.
+- Online paper content, offline files, and model output are never trusted as executable instructions.
 
-## Architecture mapping
+## Out of scope
 
-| Immersive Translate (browser) | ArxivTok |
-|------------------------------|----------|
-| Content script (DOM walk, inject) | WebView `injectedJavaScript` |
-| Background script (API calls) | React Native layer (`fetch`) |
-| `chrome.runtime.sendMessage` | `WebView.onMessage` / `postMessage` |
-| Options page (engine + key) | [`SettingsScreen`](../src/features/settings/SettingsScreen.tsx) |
+- Parsing raw TeX source. arXiv HTML is the supported structured input.
+- PDF text extraction, OCR, video, or image translation.
+- Hosted translation proxy or application-owned premium API key.
 
-WebView JS should **not** call third-party APIs directly (keys would leak). RN owns network + secrets.
+## Main files
 
-```mermaid
-sequenceDiagram
-  participant User
-  participant WebView
-  participant RN as ReactNative
-  participant API as TranslateAPI
-
-  User->>WebView: Open arxiv.org/html/...
-  User->>WebView: Tap Translate
-  WebView->>RN: postMessage extract chunks
-  RN->>API: Batch translate
-  API-->>RN: Translated text
-  RN->>WebView: postMessage inject into DOM
-  WebView-->>User: Bilingual page
-```
-
-## Core behaviors (from Immersive Translate)
-
-### Dual mode (default)
-
-Keep original nodes; insert translation below each block:
-
-```html
-<p>
-  Original paragraph…
-  <span class="arxivtok-translation">Translated paragraph…</span>
-</p>
-```
-
-Inject minimal CSS (muted color, spacing). Revert to source by removing `.arxivtok-translation` nodes — no full reload.
-
-### Display states
-
-| State | UI |
-|-------|-----|
-| `source` | Original only |
-| `dual` | Original + translation (default) |
-| `translation` | Translation only (optional later) |
-
-Replace the current `translated: boolean` toggle with a small state machine.
-
-### DOM rules (arXiv-specific)
-
-Traverse text nodes; **skip**:
-
-- `script`, `style`, `code`, `pre`
-- `math` / MathML (critical for papers)
-- Nodes already marked translated
-- Skip when detected source language equals target
-
-**Phase 1 scope:** translate `<p>` inside article body only. Skip title, authors, references, figure captions.
-
-### Segmentation & lazy translation
-
-- Group text into **paragraph units** (better context, fewer API calls).
-- **Dynamic mode:** translate visible viewport first (`IntersectionObserver` in inject JS), then scroll-triggered batches — do not translate the full paper on first tap.
-- Show progress + allow cancel for long papers.
-
-### Multi-engine (pluggable)
-
-```ts
-type TranslateProvider = {
-  id: string;
-  translate(chunks: string[], from: string, to: string): Promise<string[]>;
-};
-```
-
-| Engine | Quality | Cost model | Role |
-|--------|---------|------------|------|
-| OpenRouter | Model-dependent | BYOK; free models available | Primary path |
-| OpenAI-compatible | Service-dependent | BYOK | Direct alternative |
-
-There is no shared application key or zero-configuration proxy. OpenRouter's live
-model catalog ranks free models first; compatible endpoints can load `/models` or
-fall back to manual model input.
-
-### Caching
-
-Cache by `(arxivId, targetLang, provider)` on device (e.g. file system or AsyncStorage for small jobs). Avoid re-translating on every open.
-
-## Phased rollout
-
-### Phase 1 — Replace Google proxy
-
-- [x] Fixed URI: always original online or offline arXiv HTML
-- [x] injectJS + validated `onMessage` bridge
-- [x] OpenRouter and OpenAI-compatible BYOK profiles
-- [x] Dual mode for headings, paragraphs and body list items
-- [x] Progress, cancel and retry controls
-
-### Phase 2 — Immersive parity (lite)
-
-- [x] Multiple named provider profiles + encrypted API key storage
-- [x] Scroll/lazy translation
-- [x] Local translation cache
-- [x] `source` / `dual` modes (`translation`-only intentionally deferred)
-
-### Phase 3 — Optional
-
-- [ ] arXiv glossary / AI context for terminology
-- [ ] Feed card abstract translation (separate from reader)
-
-## Code touchpoints
-
-| File | Change |
-|------|--------|
-| [`src/features/viewer/PaperViewer.tsx`](../src/features/viewer/PaperViewer.tsx) | Remove Google URL; WebView bridge + modes |
-| [`src/features/viewer/`](../src/features/viewer/) | Bridge, queue, provider client and cache |
-| [`src/features/settings/`](../src/features/settings/) | Profiles, models and encrypted keys |
-| [`src/features/settings/SettingsScreen.tsx`](../src/features/settings/SettingsScreen.tsx) | Engine + key UI |
-| [`src/i18n/locales/*.json`](../src/i18n/locales/) | New strings |
-
-## Out of scope (for now)
-
-- PDF in-WebView translation
-- Video / image OCR translation
-- Hosted proxy backend (conflicts with no-backend design unless added later)
-
-## References
-
-- [Immersive Translate](https://immersivetranslate.com/)
-- Current reader: [`PaperViewer.tsx`](../src/features/viewer/PaperViewer.tsx)
-- Translation language prefs: [`storage.ts`](../src/lib/storage.ts), [`SettingsScreen.tsx`](../src/features/settings/SettingsScreen.tsx)
+- `src/features/viewer/arxivHtmlParser.ts`
+- `src/features/viewer/paperDocument.ts`
+- `src/features/viewer/PaperViewer.tsx`
+- `src/features/viewer/useDocumentTranslation.ts`
+- `src/features/viewer/translator.ts`
+- `src/features/library/offlinePaper.ts`

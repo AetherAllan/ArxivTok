@@ -1,13 +1,19 @@
-import { contentHash } from "@/features/library/offlineHtmlFormat";
+import { contentHash } from "@/lib/contentHash";
 import type { ProviderProfile } from "@/features/settings/providerCore";
 import type { Paper } from "@/types/paper";
 
-export type TranslationBlock = { id: string; text: string };
-export type TranslationResult = { id: string; text: string };
+export type TranslationContext = {
+  paperTitle: string;
+  sectionTitle?: string;
+  previousText?: string;
+};
 
-export type WebViewMessage =
-  | { type: "ready"; session: string; total: number }
-  | { type: "visible"; session: string; blocks: TranslationBlock[] };
+export type TranslationBlock = {
+  id: string;
+  text: string;
+  context?: TranslationContext;
+};
+export type TranslationResult = { id: string; text: string };
 
 export type TranslationPart = {
   id: string;
@@ -15,31 +21,8 @@ export type TranslationPart = {
   index: number;
   count: number;
   text: string;
+  context?: TranslationContext;
 };
-
-export function parseWebViewMessage(value: string): WebViewMessage | null {
-  try {
-    const message = JSON.parse(value) as Record<string, unknown>;
-    if (typeof message.session !== "string") return null;
-    if (message.type === "ready" && typeof message.total === "number") {
-      return { type: "ready", session: message.session, total: message.total };
-    }
-    if (message.type === "visible" && Array.isArray(message.blocks)) {
-      const blocks = message.blocks.filter(
-        (item): item is TranslationBlock =>
-          !!item &&
-          typeof item === "object" &&
-          typeof item.id === "string" &&
-          typeof item.text === "string" &&
-          item.text.length > 0,
-      );
-      return { type: "visible", session: message.session, blocks };
-    }
-  } catch {
-    // Web content is an untrusted boundary; malformed messages are ignored.
-  }
-  return null;
-}
 
 function splitText(text: string, maxChars: number): string[] {
   if (text.length <= maxChars) return [text];
@@ -53,8 +36,18 @@ function splitText(text: string, maxChars: number): string[] {
       window.lastIndexOf("! "),
       window.lastIndexOf("? "),
     );
+    const newline = window.lastIndexOf("\n");
     const whitespace = window.lastIndexOf(" ");
-    const cut = sentence > maxChars / 2 ? sentence + 1 : whitespace > 0 ? whitespace : maxChars;
+    // Prefer a row/list boundary. Splitting a large Markdown table in the
+    // middle of a cell makes both model output and final rendering unstable.
+    const cut =
+      newline > maxChars / 2
+        ? newline
+        : sentence > maxChars / 2
+          ? sentence + 1
+          : whitespace > 0
+            ? whitespace
+            : maxChars;
     parts.push(rest.slice(0, cut).trim());
     rest = rest.slice(cut).trim();
   }
@@ -65,7 +58,7 @@ function splitText(text: string, maxChars: number): string[] {
 export function prepareTranslationBatches(
   blocks: TranslationBlock[],
   maxBlocks = 6,
-  maxChars = 6000,
+  maxChars = 4500,
 ): TranslationPart[][] {
   const parts = blocks.flatMap((block) => {
     const texts = splitText(block.text, maxChars);
@@ -75,13 +68,29 @@ export function prepareTranslationBatches(
       index,
       count: texts.length,
       text,
+      context: block.context
+        ? {
+            ...block.context,
+            previousText:
+              index > 0
+                ? texts[index - 1]?.slice(-600)
+                : block.context.previousText,
+          }
+        : undefined,
     }));
   });
   const batches: TranslationPart[][] = [];
   for (const part of parts) {
     const current = batches.at(-1);
     const chars = current?.reduce((sum, item) => sum + item.text.length, 0) ?? 0;
-    if (!current || current.length >= maxBlocks || chars + part.text.length > maxChars) {
+    const currentSection = current?.[0]?.context?.sectionTitle ?? "";
+    const nextSection = part.context?.sectionTitle ?? "";
+    if (
+      !current ||
+      current.length >= maxBlocks ||
+      chars + part.text.length > maxChars ||
+      currentSection !== nextSection
+    ) {
       batches.push([part]);
     } else {
       current.push(part);
@@ -110,7 +119,8 @@ export function parseTranslationResponse(
       typeof row.text === "string" &&
       expectedIds.has(row.id),
   );
-  if (results.length !== expectedIds.size) {
+  const uniqueIds = new Set(results.map((result) => result.id));
+  if (results.length !== expectedIds.size || uniqueIds.size !== expectedIds.size) {
     throw new Error("Model response did not include every requested block");
   }
   return results;
@@ -129,7 +139,9 @@ export function reassembleTranslations(
     text: parts
       .sort((a, b) => a.index - b.index)
       .map((part) => translatedParts.get(part.id) ?? "")
-      .join(" ")
+      // A soft Markdown line break reads as a space for prose while preserving
+      // row and list boundaries for structured blocks.
+      .join("\n")
       .trim(),
   }));
 }
@@ -138,12 +150,14 @@ export function translationCacheId(
   paper: Paper,
   profile: ProviderProfile,
   targetLang: string,
+  sourceHash = "",
 ): string {
   return contentHash(
     JSON.stringify({
-      version: 1,
+      version: 2,
       arxivId: paper.arxivId,
       updated: paper.updated,
+      sourceHash,
       targetLang,
       kind: profile.kind,
       baseUrl: profile.baseUrl,
@@ -153,5 +167,7 @@ export function translationCacheId(
 }
 
 export function blockCacheKey(block: TranslationBlock): string {
-  return `${block.id}:${contentHash(block.text)}`;
+  return `${block.id}:${contentHash(
+    JSON.stringify({ text: block.text, context: block.context }),
+  )}`;
 }

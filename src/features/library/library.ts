@@ -7,7 +7,8 @@ const KEYS = {
   history: "arxivtok.history",
   pdfDownloads: "arxivtok.pdfDownloads",
   legacyDownloads: "arxivtok.downloads",
-  offlineHtml: "arxivtok.offlineHtml",
+  // Keep the shipped key so upgrades retain existing version-1 HTML packages.
+  offlinePapers: "arxivtok.offlineHtml",
   downloadsDirUri: "arxivtok.downloadsDirUri",
 } as const;
 
@@ -22,7 +23,7 @@ export type PdfDownloadEntry = Paper & {
   exported: boolean;
   downloadedAt: number;
 };
-export type OfflineHtmlEntry = Paper & {
+export type OfflinePaperEntry = Paper & {
   entryUri: string;
   packageDir: string;
   sourceHash: string;
@@ -31,7 +32,7 @@ export type OfflineHtmlEntry = Paper & {
   downloadedAt: number;
 };
 export type DownloadSummary = Paper & {
-  html?: OfflineHtmlEntry;
+  offline?: OfflinePaperEntry;
   pdf?: PdfDownloadEntry;
 };
 
@@ -123,9 +124,9 @@ export async function loadPdfDownloads(): Promise<PdfDownloadEntry[]> {
   return entries;
 }
 
-function coerceOfflineHtml(
+function coerceOfflinePaper(
   raw: Record<string, unknown>,
-): OfflineHtmlEntry | null {
+): OfflinePaperEntry | null {
   const paper = coercePaper(raw);
   if (
     !paper ||
@@ -147,9 +148,9 @@ function coerceOfflineHtml(
   };
 }
 
-export async function loadOfflineHtml(): Promise<OfflineHtmlEntry[]> {
-  return records(await readJson<unknown>(KEYS.offlineHtml, []))
-    .map(coerceOfflineHtml)
+export async function loadOfflinePapers(): Promise<OfflinePaperEntry[]> {
+  return records(await readJson<unknown>(KEYS.offlinePapers, []))
+    .map(coerceOfflinePaper)
     .filter((item) => item !== null);
 }
 
@@ -167,10 +168,10 @@ export async function persistPdfDownloads(
   await writeJson(KEYS.pdfDownloads, list);
 }
 
-export async function persistOfflineHtml(
-  list: OfflineHtmlEntry[],
+export async function persistOfflinePapers(
+  list: OfflinePaperEntry[],
 ): Promise<void> {
-  await writeJson(KEYS.offlineHtml, list);
+  await writeJson(KEYS.offlinePapers, list);
 }
 
 export function upsertSaved(list: SavedEntry[], paper: Paper): SavedEntry[] {
@@ -199,23 +200,23 @@ export function upsertByArxivId<T extends { arxivId: string }>(
 }
 
 export function summarizeDownloads(
-  html: OfflineHtmlEntry[],
+  offline: OfflinePaperEntry[],
   pdf: PdfDownloadEntry[],
 ): DownloadSummary[] {
   const summaries = new Map<string, DownloadSummary>();
-  for (const entry of [...html, ...pdf]) {
+  for (const entry of [...offline, ...pdf]) {
     const current = summaries.get(entry.arxivId) ?? entry;
     summaries.set(entry.arxivId, {
       ...current,
       ...(entry as Paper),
-      ...("entryUri" in entry ? { html: entry } : {}),
+      ...("entryUri" in entry ? { offline: entry } : {}),
       ...("localUri" in entry ? { pdf: entry } : {}),
     });
   }
   return [...summaries.values()].sort(
     (a, b) =>
-      Math.max(b.html?.downloadedAt ?? 0, b.pdf?.downloadedAt ?? 0) -
-      Math.max(a.html?.downloadedAt ?? 0, a.pdf?.downloadedAt ?? 0),
+      Math.max(b.offline?.downloadedAt ?? 0, b.pdf?.downloadedAt ?? 0) -
+      Math.max(a.offline?.downloadedAt ?? 0, a.pdf?.downloadedAt ?? 0),
   );
 }
 

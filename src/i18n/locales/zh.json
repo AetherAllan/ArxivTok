@@ -85,6 +85,15 @@
     "tlAr": "阿拉伯语",
     "tlHi": "印地语"
   },
+  "reader": {
+    "loading": "正在准备原生阅读页…",
+    "contents": "目录",
+    "unavailable": "这篇论文暂时无法使用原生阅读",
+    "devClientTitle": "当前安装包缺少原生阅读器",
+    "devClientBody": "请重新编译并安装 ArxivTok 开发客户端。Expo Go 和旧版开发客户端不包含 EnrichedMarkdown。",
+    "openPdf": "打开 PDF",
+    "openArxiv": "在 arXiv 打开"
+  },
   "library": {
     "title": "资料库",
     "tabSaved": "收藏",
@@ -100,16 +109,17 @@
     "unsave": "移除",
     "downloadFailed": "下载失败",
     "downloadChoiceTitle": "下载论文",
-    "downloadHtml": "离线 HTML",
+    "downloadOffline": "离线阅读包",
+    "readerPackage": "阅读包",
     "downloadPdf": "PDF",
     "manage": "管理",
     "removeDownloads": "删除下载",
-    "removeDownloadsBody": "将删除这篇论文的离线 HTML 和本机 PDF。",
+    "removeDownloadsBody": "将删除这篇论文的离线阅读包和本机 PDF。",
     "openPdf": "打开 PDF"
   },
   "provider": {
     "title": "翻译服务",
-    "hint": "密钥只保存在设备加密存储中，并且只会发给当前选择的 HTTPS 服务。",
+    "hint": "Google 无需密钥。其他密钥只保存在设备加密存储中，并且只会发给当前选择的 HTTPS 服务。",
     "compatible": "兼容接口",
     "noModel": "尚未选择模型",
     "edit": "编辑",
@@ -127,6 +137,7 @@
     "connectionOk": "连接成功",
     "connectionFailed": "连接失败",
     "modelsFound": "找到 {{count}} 个模型。",
+    "free": "免费",
     "keyRequired": "必须填写 API Key",
     "saveFailed": "无法保存服务配置",
     "delete": "删除配置",
@@ -134,10 +145,11 @@
   },
   "translation": {
     "setupTitle": "配置翻译服务",
-    "setupBody": "翻译前需要选择服务配置、模型并填写 API Key。",
+    "setupBody": "翻译前请选择 Google，或配置翻译服务的模型与 API Key。",
     "keyMissing": "当前服务配置没有 API Key",
     "pending": "队列 {{count}}",
-    "retryFailed": "重试失败段落"
+    "retryFailed": "点击重试",
+    "translationOnly": "仅译文"
   },
   "group": {
     "Browse": "浏览",

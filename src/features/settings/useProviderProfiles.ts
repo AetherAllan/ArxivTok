@@ -6,7 +6,11 @@ import {
   persistProviderState,
   setProviderApiKey,
 } from "./providers";
-import { validateProfile, type ProviderProfile } from "./providerCore";
+import {
+  GOOGLE_PROFILE_ID,
+  validateProfile,
+  type ProviderProfile,
+} from "./providerCore";
 
 export function useProviderProfiles() {
   const [profiles, setProfiles] = useState<ProviderProfile[]>([]);
@@ -28,6 +32,7 @@ export function useProviderProfiles() {
 
   const saveProfile = useCallback(
     async (profile: ProviderProfile, apiKey?: string) => {
+      if (profile.id === GOOGLE_PROFILE_ID) return;
       const error = validateProfile(profile);
       if (error) throw new Error(error);
       const nextProfiles = [
@@ -48,6 +53,7 @@ export function useProviderProfiles() {
 
   const deleteProfile = useCallback(
     async (profileId: string) => {
+      if (profileId === GOOGLE_PROFILE_ID) return;
       const nextProfiles = profiles.filter((item) => item.id !== profileId);
       const nextActive =
         activeProfileId === profileId

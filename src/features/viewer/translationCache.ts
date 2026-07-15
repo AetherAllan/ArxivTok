@@ -19,8 +19,9 @@ export async function loadTranslationCache(
   cacheId: string,
 ): Promise<TranslationCache> {
   const uri = cacheUri(cacheId);
-  if (!uri || !(await getInfoAsync(uri)).exists) return {};
+  if (!uri) return {};
   try {
+    if (!(await getInfoAsync(uri)).exists) return {};
     const parsed = JSON.parse(await readAsStringAsync(uri)) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
     return Object.fromEntries(

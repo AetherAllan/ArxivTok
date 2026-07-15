@@ -85,6 +85,15 @@
     "tlAr": "Arabic",
     "tlHi": "Hindi"
   },
+  "reader": {
+    "loading": "Preparing the native reader…",
+    "contents": "Contents",
+    "unavailable": "Native reading is unavailable for this paper",
+    "devClientTitle": "This build is missing the native reader",
+    "devClientBody": "Rebuild and install the ArxivTok development client. Expo Go and older development builds do not include EnrichedMarkdown.",
+    "openPdf": "Open PDF",
+    "openArxiv": "Open on arXiv"
+  },
   "library": {
     "title": "Library",
     "tabSaved": "Saved",
@@ -100,16 +109,17 @@
     "unsave": "Remove",
     "downloadFailed": "Download failed",
     "downloadChoiceTitle": "Download paper",
-    "downloadHtml": "Offline HTML",
+    "downloadOffline": "Offline reader",
+    "readerPackage": "Reader",
     "downloadPdf": "PDF",
     "manage": "Manage",
     "removeDownloads": "Delete downloads",
-    "removeDownloadsBody": "This removes the offline HTML and app-local PDF for this paper.",
+    "removeDownloadsBody": "This removes the offline reader package and app-local PDF for this paper.",
     "openPdf": "Open PDF"
   },
   "provider": {
     "title": "Translation providers",
-    "hint": "Keys stay in encrypted device storage and are sent only to the selected HTTPS provider.",
+    "hint": "Google works without a key. Other keys stay in encrypted device storage and are sent only to the selected HTTPS provider.",
     "compatible": "Compatible API",
     "noModel": "No model selected",
     "edit": "Edit",
@@ -127,6 +137,7 @@
     "connectionOk": "Connection succeeded",
     "connectionFailed": "Connection failed",
     "modelsFound": "Found {{count}} models.",
+    "free": "Free",
     "keyRequired": "API key is required",
     "saveFailed": "Could not save provider",
     "delete": "Delete profile",
@@ -134,9 +145,10 @@
   },
   "translation": {
     "setupTitle": "Set up translation",
-    "setupBody": "Choose a provider profile, model, and API key before translating.",
+    "setupBody": "Select Google, or configure a provider model and API key before translating.",
     "keyMissing": "The selected provider has no API key",
     "pending": "{{count}} queued",
-    "retryFailed": "Retry failed blocks"
+    "retryFailed": "Tap to retry",
+    "translationOnly": "Translation"
   }
 }
