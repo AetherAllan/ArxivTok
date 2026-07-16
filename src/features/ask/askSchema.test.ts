@@ -1,20 +1,12 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import {
-  ASK_PRAGMAS_SQL,
-  ASK_RESET_SQL,
-  ASK_SCHEMA_SQL,
-} from "./askSchema";
+import { ASK_PRAGMAS_SQL, ASK_RESET_SQL, ASK_SCHEMA_SQL } from "./askSchema";
 
 describe("Ask SQLite schema", () => {
   test("creates the persistent tables and cascades a thread delete", () => {
     const database = new Database(":memory:");
     database.exec(`${ASK_PRAGMAS_SQL}${ASK_SCHEMA_SQL}`);
-    database
-      .query(
-        "INSERT INTO ask_threads(arxiv_id) VALUES (?)",
-      )
-      .run("1");
+    database.query("INSERT INTO ask_threads(arxiv_id) VALUES (?)").run("1");
     database
       .query(
         "INSERT INTO ask_messages(id, arxiv_id, role, content, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",

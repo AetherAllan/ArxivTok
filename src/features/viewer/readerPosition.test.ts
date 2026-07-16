@@ -33,9 +33,11 @@ describe("reader position", () => {
   });
 
   test("falls back to the document top when the block no longer exists", () => {
-    expect(resolveInitialReaderPosition(document, {
-      ...saved,
-      readerBlockId: "missing",
-    })).toEqual({ blockIndex: 0, blockId: null });
+    expect(
+      resolveInitialReaderPosition(document, {
+        ...saved,
+        readerBlockId: "missing",
+      }),
+    ).toEqual({ blockIndex: 0, blockId: null });
   });
 });

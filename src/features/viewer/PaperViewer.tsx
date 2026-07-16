@@ -431,10 +431,7 @@ export function PaperViewer({
     // Dynamic native Markdown does not expose stable per-cell geometry. The
     // semantic block is the durable position; guessed pixels recreate the
     // same restore race this path is meant to remove.
-    void saveReaderPosition(
-      paper.arxivId,
-      blockId,
-    ).catch(() => {
+    void saveReaderPosition(paper.arxivId, blockId).catch(() => {
       // Reading memory is optional; leaving the reader must always succeed.
     });
   }, [document, paper]);

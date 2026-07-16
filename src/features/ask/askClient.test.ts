@@ -45,9 +45,9 @@ describe("Ask chat request", () => {
       "stream",
       true,
     );
-    expect(buildChatRequestBody(openRouter, "q", true, true)).not.toHaveProperty(
-      "stream_options",
-    );
+    expect(
+      buildChatRequestBody(openRouter, "q", true, true),
+    ).not.toHaveProperty("stream_options");
     expect(
       buildChatRequestBody(openRouter, "q", false, false),
     ).not.toHaveProperty("tools");
