@@ -32,6 +32,7 @@ mock.module("expo-file-system/legacy", () => ({
 const {
   loadAskProviderId,
   loadProviderState,
+  persistActiveProviderId,
   persistAskProviderId,
   persistProviderState,
   resetProviderState,
@@ -76,6 +77,30 @@ describe("provider secret ownership", () => {
     expect(asyncValues.get("paprism.activeProviderProfile")).toBe(
       "translation",
     );
+  });
+
+  test("selects a newly saved translation provider without rewriting profiles", async () => {
+    await persistProviderState({
+      activeProfileId: "google-web",
+      profiles: [
+        {
+          id: "new-provider",
+          name: "OpenRouter",
+          kind: "openrouter",
+          baseUrl: "https://openrouter.ai/api/v1",
+          model: "free/model:free",
+        },
+      ],
+    });
+
+    await persistActiveProviderId("new-provider");
+
+    const state = await loadProviderState();
+    expect(state.activeProfileId).toBe("new-provider");
+    expect(state.profiles.map((profile) => profile.id)).toEqual([
+      "google-web",
+      "new-provider",
+    ]);
   });
 
   test("resets custom providers, selections, and their secrets", async () => {

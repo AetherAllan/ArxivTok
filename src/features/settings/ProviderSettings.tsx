@@ -28,6 +28,11 @@ type Props = {
   modelLoader?: ModelLoader;
 };
 
+type EditorDraft = {
+  profile: ProviderProfile;
+  activateAfterSave: boolean;
+};
+
 export function ProviderSettings({
   manager,
   activeProfileId = manager.activeProfileId,
@@ -39,15 +44,18 @@ export function ProviderSettings({
 }: Props) {
   const { t } = useTranslation();
   const { showError } = useAppDialog();
-  const [draft, setDraft] = useState<ProviderProfile | null>(null);
+  const [draft, setDraft] = useState<EditorDraft | null>(null);
 
   const create = (kind: "openrouter" | "openai-compatible") => {
     setDraft({
-      id: createProfileId(),
-      name: kind === "openrouter" ? "OpenRouter" : t("provider.compatible"),
-      kind,
-      baseUrl: kind === "openrouter" ? OPENROUTER_BASE_URL : "https://",
-      model: "",
+      profile: {
+        id: createProfileId(),
+        name: kind === "openrouter" ? "OpenRouter" : t("provider.compatible"),
+        kind,
+        baseUrl: kind === "openrouter" ? OPENROUTER_BASE_URL : "https://",
+        model: "",
+      },
+      activateAfterSave: true,
     });
   };
 
@@ -80,7 +88,7 @@ export function ProviderSettings({
             {profile.id !== GOOGLE_PROFILE_ID ? (
               <Pressable
                 accessibilityLabel={t("provider.edit")}
-                onPress={() => setDraft(profile)}
+                onPress={() => setDraft({ profile, activateAfterSave: false })}
                 hitSlop={8}
                 style={styles.iconButton}
               >
@@ -106,10 +114,15 @@ export function ProviderSettings({
         </Pressable>
       </View>
       <ProviderEditor
-        key={draft?.id ?? "closed"}
-        draft={draft}
+        key={draft?.profile.id ?? "closed"}
+        draft={draft?.profile ?? null}
         manager={manager}
         modelLoader={modelLoader}
+        onSaved={
+          draft?.activateAfterSave
+            ? (profile) => onSelect(profile.id)
+            : undefined
+        }
         onClose={() => setDraft(null)}
       />
     </View>

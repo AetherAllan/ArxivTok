@@ -103,6 +103,16 @@ export async function persistProviderState(
   });
 }
 
+export async function persistActiveProviderId(
+  profileId: string | null,
+): Promise<void> {
+  await enqueueStorageWrite(() =>
+    profileId
+      ? AsyncStorage.setItem(ACTIVE_KEY, profileId)
+      : AsyncStorage.removeItem(ACTIVE_KEY),
+  );
+}
+
 export async function loadAskProviderId(): Promise<string | null> {
   return AsyncStorage.getItem(ASK_ACTIVE_KEY);
 }

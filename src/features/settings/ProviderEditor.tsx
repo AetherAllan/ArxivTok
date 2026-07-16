@@ -39,11 +39,13 @@ export function ProviderEditor({
   draft,
   manager,
   modelLoader = loadProviderModels,
+  onSaved,
   onClose,
 }: {
   draft: ProviderProfile | null;
   manager: EditableProviderManager;
   modelLoader?: ModelLoader;
+  onSaved?: (profile: ProviderProfile) => Promise<void>;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -107,6 +109,7 @@ export function ProviderEditor({
       const existingKey = apiKey.trim() || (await manager.getApiKey(form.id));
       if (!existingKey) throw new Error(t("provider.keyRequired"));
       await manager.saveProfile(form, apiKey);
+      await onSaved?.(form);
       onClose();
       showDialog({ kind: "success", title: t("provider.saved") });
     } catch (error) {

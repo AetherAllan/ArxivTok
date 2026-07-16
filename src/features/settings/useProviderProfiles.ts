@@ -4,6 +4,7 @@ import {
   getProviderApiKey,
   loadAskProviderId,
   loadProviderState,
+  persistActiveProviderId,
   persistProviderState,
   persistAskProviderId,
   resetProviderState,
@@ -103,13 +104,12 @@ export function useProviderProfiles() {
     [activeAskProfileId, activeProfileId, profiles],
   );
 
-  const setActiveProfileId = useCallback(
-    async (profileId: string) => {
-      await persistProviderState({ profiles, activeProfileId: profileId });
-      setActiveProfileIdState(profileId);
-    },
-    [profiles],
-  );
+  const setActiveProfileId = useCallback(async (profileId: string) => {
+    // Selecting a profile must not rewrite the profile list. In particular,
+    // a just-saved profile may not exist in this callback's previous render.
+    await persistActiveProviderId(profileId);
+    setActiveProfileIdState(profileId);
+  }, []);
   const clearRecoveryWarning = useCallback(() => setRecoveryWarning(false), []);
   const setActiveAskProfileId = useCallback(async (profileId: string) => {
     if (profileId === GOOGLE_PROFILE_ID)
