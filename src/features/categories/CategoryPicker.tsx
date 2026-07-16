@@ -39,6 +39,7 @@ export function CategoryPicker({
   onClose,
 }: Props) {
   const { t, i18n } = useTranslation();
+  const language = i18n.language;
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState(() => normalizeCategories(selected));
@@ -50,22 +51,23 @@ export function CategoryPicker({
     setQuery("");
   }, [visible, selected]);
 
-  const searchableCategories = useMemo(
-    () =>
-      FEED_CATEGORIES.map((category) => ({
-        category,
-        text: [
-          category.id,
-          category.label,
-          category.group,
-          categoryLabel(category.id),
-          categoryGroupLabel(category.group),
-        ]
-          .join("\n")
-          .toLocaleLowerCase(),
-      })),
-    [i18n.language],
-  );
+  const searchableCategories = useMemo(() => {
+    // categoryLabel reads the shared i18n instance, so language is the
+    // explicit invalidation key even though it is not passed as an argument.
+    void language;
+    return FEED_CATEGORIES.map((category) => ({
+      category,
+      text: [
+        category.id,
+        category.label,
+        category.group,
+        categoryLabel(category.id),
+        categoryGroupLabel(category.group),
+      ]
+        .join("\n")
+        .toLocaleLowerCase(),
+    }));
+  }, [language]);
 
   const sections = useMemo(() => {
     const value = query.trim().toLocaleLowerCase();

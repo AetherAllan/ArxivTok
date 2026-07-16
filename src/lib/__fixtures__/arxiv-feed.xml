@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"
+      xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">
+  <opensearch:totalResults>3</opensearch:totalResults>
+  <entry>
+    <id>http://arxiv.org/abs/2607.01234v2</id>
+    <updated>2026-07-14T12:00:00Z</updated>
+    <published>2026-07-10T10:00:00Z</published>
+    <title><![CDATA[ Paper & Prism ]]></title>
+    <summary>Research &amp; discovery with &#x3B1; signals.</summary>
+    <author><name>Ada Lovelace</name></author>
+    <author><name>Alan Turing</name></author>
+    <category term="cs.AI" />
+    <category term='cs.HC' />
+  </entry>
+  <entry>
+    <id>https://arxiv.org/abs/hep-th/9901001v1</id>
+    <published>1999-01-04T00:00:00Z</published>
+    <title>Legacy identifier</title>
+    <author><name>Emmy Noether</name></author>
+    <category term="hep-th" />
+  </entry>
+  <entry>
+    <title>Malformed entry without an id</title>
+  </entry>
+</feed>

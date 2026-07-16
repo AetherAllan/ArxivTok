@@ -22,6 +22,7 @@ export function usePaperSearch(categories: string[]) {
     categoryKey: string;
   } | null>(null);
   const requests = useRef(new Set<string>());
+  const controllers = useRef(new Map<string, AbortController>());
   const categoryKey = categoriesToSearchQuery(categories);
   const pendingQuery = buildSearchQuery(query, scope, categories);
 
@@ -39,6 +40,7 @@ export function usePaperSearch(categories: string[]) {
     // after the feed filter changes. Advancing the generation also rejects a
     // response that was already in flight for the previous categories.
     const generationId = ++generation.current;
+    for (const controller of controllers.current.values()) controller.abort();
     active.current = null;
     dispatch({ type: "clear", generation: generationId });
   }, [categoryKey]);
@@ -53,6 +55,8 @@ export function usePaperSearch(categories: string[]) {
       const requestKey = `${generationId}:${start}`;
       if (requests.current.has(requestKey)) return;
       requests.current.add(requestKey);
+      const controller = new AbortController();
+      controllers.current.set(requestKey, controller);
       dispatch({ type: "request", generation: generationId, reset });
 
       try {
@@ -61,6 +65,7 @@ export function usePaperSearch(categories: string[]) {
           start,
           maxResults: ARXIV_PAGE_SIZE,
           sortBy: "relevance",
+          signal: controller.signal,
         });
         dispatch({
           type: "success",
@@ -70,6 +75,7 @@ export function usePaperSearch(categories: string[]) {
           papers: page.papers,
         });
       } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") return;
         dispatch({
           type: "failure",
           generation: generationId,
@@ -80,6 +86,9 @@ export function usePaperSearch(categories: string[]) {
         });
       } finally {
         requests.current.delete(requestKey);
+        if (controllers.current.get(requestKey) === controller) {
+          controllers.current.delete(requestKey);
+        }
       }
     },
     [t],
@@ -96,6 +105,7 @@ export function usePaperSearch(categories: string[]) {
     }
 
     const generationId = ++generation.current;
+    for (const controller of controllers.current.values()) controller.abort();
     active.current = {
       generation: generationId,
       query: pendingQuery,
@@ -105,6 +115,13 @@ export function usePaperSearch(categories: string[]) {
     void requestPage(generationId, pendingQuery, 0, true);
     return true;
   }, [categoryKey, pendingQuery, requestPage, scope]);
+
+  useEffect(
+    () => () => {
+      for (const controller of controllers.current.values()) controller.abort();
+    },
+    [],
+  );
 
   const loadMore = useCallback(
     (retry = false) => {

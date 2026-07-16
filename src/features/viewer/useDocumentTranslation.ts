@@ -26,6 +26,32 @@ const RETRY_DELAYS_MS = [3000, 6000, 12_000, 30_000] as const;
 
 type Progress = { completed: number; pending: number; failed: number };
 
+type TranslationRuntime = {
+  session: string;
+  controller: AbortController | null;
+  pending: Map<string, TranslationBlock>;
+  inFlight: Set<string>;
+  failed: Map<string, TranslationBlock>;
+  completed: Set<string>;
+  cache: TranslationCache;
+  cacheReady: Promise<void>;
+  processing: boolean;
+};
+
+function createRuntime(session: string): TranslationRuntime {
+  return {
+    session,
+    controller: null,
+    pending: new Map(),
+    inFlight: new Set(),
+    failed: new Map(),
+    completed: new Set(),
+    cache: {},
+    cacheReady: Promise.resolve(),
+    processing: false,
+  };
+}
+
 type Options = {
   active: boolean;
   paper: Paper | null;
@@ -72,16 +98,8 @@ export function useDocumentTranslation({
   targetLang,
   getProviderApiKey,
 }: Options) {
-  const controller = useRef<AbortController | null>(null);
-  const pending = useRef(new Map<string, TranslationBlock>());
-  const inFlight = useRef(new Set<string>());
-  const failed = useRef(new Map<string, TranslationBlock>());
-  const completed = useRef(new Set<string>());
-  const cache = useRef<TranslationCache>({});
-  const cacheReady = useRef<Promise<void>>(Promise.resolve());
-  const processingSession = useRef<string | null>(null);
   const activeRef = useRef(active);
-  const sessionRef = useRef("");
+  const runtimeRef = useRef<TranslationRuntime>(createRuntime(""));
   const [translations, setTranslations] = useState<Record<string, string>>({});
   const [progress, setProgress] = useState<Progress>({
     completed: 0,
@@ -112,51 +130,49 @@ export function useDocumentTranslation({
   );
   const session = `${cacheId ?? "none"}:${document?.sourceHash ?? "none"}`;
 
-  const refreshProgress = useCallback(() => {
+  const refreshProgress = useCallback((runtime = runtimeRef.current) => {
+    if (runtimeRef.current !== runtime) return;
     // A request remains pending from the user's perspective until its result is
     // committed. Use a union because transient failures briefly requeue the
     // same IDs before the request's finally block releases them.
-    const waiting = new Set([...pending.current.keys(), ...inFlight.current]);
+    const waiting = new Set([...runtime.pending.keys(), ...runtime.inFlight]);
     setProgress({
-      completed: completed.current.size,
+      completed: runtime.completed.size,
       pending: waiting.size,
-      failed: failed.current.size,
+      failed: runtime.failed.size,
     });
   }, []);
 
   useEffect(() => {
-    sessionRef.current = session;
-    controller.current?.abort();
-    pending.current.clear();
-    inFlight.current.clear();
-    failed.current.clear();
-    completed.current.clear();
-    cache.current = {};
-    processingSession.current = null;
+    runtimeRef.current.controller?.abort();
+    const runtime = createRuntime(session);
+    runtimeRef.current = runtime;
     setTranslations({});
     setError(null);
-    refreshProgress();
-    cacheReady.current = cacheId
+    refreshProgress(runtime);
+    runtime.cacheReady = cacheId
       ? loadTranslationCache(cacheId).then((loaded) => {
-          if (sessionRef.current === session) cache.current = loaded;
+          if (runtimeRef.current === runtime) runtime.cache = loaded;
         })
       : Promise.resolve();
-    return () => controller.current?.abort();
+    return () => runtime.controller?.abort();
   }, [cacheId, refreshProgress, session]);
 
   useEffect(() => {
     activeRef.current = active;
     if (!active) {
-      controller.current?.abort();
-      pending.current.clear();
-      refreshProgress();
+      const runtime = runtimeRef.current;
+      runtime.controller?.abort();
+      runtime.pending.clear();
+      refreshProgress(runtime);
     }
   }, [active, refreshProgress]);
 
   const drainQueue = useCallback(
     async function runQueue() {
+      const runtime = runtimeRef.current;
       if (
-        processingSession.current === sessionRef.current ||
+        runtime.processing ||
         !activeRef.current ||
         !paper ||
         !providerProfile ||
@@ -164,8 +180,7 @@ export function useDocumentTranslation({
       ) {
         return;
       }
-      const expectedSession = sessionRef.current;
-      processingSession.current = expectedSession;
+      runtime.processing = true;
       let retryCount = 0;
       try {
         const apiKey =
@@ -175,20 +190,24 @@ export function useDocumentTranslation({
         if (providerProfile.kind !== "google" && !apiKey) {
           throw new Error("The selected provider has no API key");
         }
-        while (pending.current.size > 0 && activeRef.current) {
-          const title = pending.current.get(PAPER_TITLE_TRANSLATION_ID);
+        while (
+          runtime.pending.size > 0 &&
+          activeRef.current &&
+          runtimeRef.current === runtime
+        ) {
+          const title = runtime.pending.get(PAPER_TITLE_TRANSLATION_ID);
           // The title is a tiny, immediately visible request. Finish it first so
           // the reader shows useful progress before larger paragraph batches.
           const batch = title
             ? [title]
-            : [...pending.current.values()].slice(0, 6);
+            : [...runtime.pending.values()].slice(0, 6);
           for (const block of batch) {
-            pending.current.delete(block.id);
-            inFlight.current.add(block.id);
+            runtime.pending.delete(block.id);
+            runtime.inFlight.add(block.id);
           }
-          refreshProgress();
+          refreshProgress(runtime);
           const currentController = new AbortController();
-          controller.current = currentController;
+          runtime.controller = currentController;
           try {
             const results = await translateBlocks(
               providerProfile,
@@ -198,7 +217,7 @@ export function useDocumentTranslation({
               currentController.signal,
             );
             if (
-              sessionRef.current !== expectedSession ||
+              runtimeRef.current !== runtime ||
               currentController.signal.aborted
             ) {
               return;
@@ -231,12 +250,12 @@ export function useDocumentTranslation({
             // not leave earlier paragraphs looking successfully translated.
             for (const [id, markdown] of Object.entries(restored)) {
               const requestBlock = requests.get(id)!;
-              completed.current.add(id);
-              failed.current.delete(id);
-              cache.current[blockCacheKey(requestBlock)] = markdown;
+              runtime.completed.add(id);
+              runtime.failed.delete(id);
+              runtime.cache[blockCacheKey(requestBlock)] = markdown;
             }
             setTranslations((current) => ({ ...current, ...restored }));
-            void saveTranslationCache(cacheId, cache.current).catch(
+            void saveTranslationCache(cacheId, runtime.cache).catch(
               () => undefined,
             );
             setError(null);
@@ -246,11 +265,11 @@ export function useDocumentTranslation({
             if (isRetryableTranslationError(translationError)) {
               // Keep the visible batch first. As long as translation mode stays
               // active, transient provider failures retry with a capped backoff.
-              pending.current = new Map([
+              runtime.pending = new Map([
                 ...batch.map((block) => [block.id, block] as const),
-                ...pending.current,
+                ...runtime.pending,
               ]);
-              refreshProgress();
+              refreshProgress(runtime);
               const delay =
                 RETRY_DELAYS_MS[
                   Math.min(retryCount, RETRY_DELAYS_MS.length - 1)
@@ -261,37 +280,36 @@ export function useDocumentTranslation({
                 return;
               continue;
             }
-            for (const block of batch) failed.current.set(block.id, block);
-            for (const block of pending.current.values()) {
-              failed.current.set(block.id, block);
+            for (const block of batch) runtime.failed.set(block.id, block);
+            for (const block of runtime.pending.values()) {
+              runtime.failed.set(block.id, block);
             }
-            pending.current.clear();
+            runtime.pending.clear();
             setError(
               translationError instanceof Error
                 ? translationError.message
                 : "Unknown translation error",
             );
-            refreshProgress();
+            refreshProgress(runtime);
             break;
           } finally {
             // A replaced session may already be translating blocks with the same
             // arXiv-generated IDs. The old request must not release their state.
-            if (sessionRef.current === expectedSession) {
-              for (const block of batch) inFlight.current.delete(block.id);
+            if (runtimeRef.current === runtime) {
+              for (const block of batch) runtime.inFlight.delete(block.id);
             }
           }
-          refreshProgress();
+          refreshProgress(runtime);
         }
       } catch (translationError) {
-        if (sessionRef.current !== expectedSession || !activeRef.current)
-          return;
+        if (runtimeRef.current !== runtime || !activeRef.current) return;
         // Credential access happens before a request controller exists. Treat a
         // failure here as retryable by the user, but do not leave pending work in
         // place or finally would immediately start the same failing loop again.
-        for (const block of pending.current.values()) {
-          failed.current.set(block.id, block);
+        for (const block of runtime.pending.values()) {
+          runtime.failed.set(block.id, block);
         }
-        pending.current.clear();
+        runtime.pending.clear();
         setError(
           translationError instanceof Error
             ? translationError.message
@@ -301,15 +319,11 @@ export function useDocumentTranslation({
         // Session replacement deliberately permits the new queue to start before
         // the aborted promise settles. Only the current owner may clear shared
         // controller/processing state or schedule more work.
-        if (processingSession.current === expectedSession) {
-          processingSession.current = null;
-          controller.current = null;
-          refreshProgress();
-          if (
-            activeRef.current &&
-            pending.current.size > 0 &&
-            sessionRef.current === expectedSession
-          ) {
+        if (runtimeRef.current === runtime) {
+          runtime.processing = false;
+          runtime.controller = null;
+          refreshProgress(runtime);
+          if (activeRef.current && runtime.pending.size > 0) {
             void runQueue();
           }
         }
@@ -329,9 +343,9 @@ export function useDocumentTranslation({
   const enqueue = useCallback(
     async (ids: string[]) => {
       if (!activeRef.current || !paper) return;
-      const expectedSession = sessionRef.current;
-      await cacheReady.current;
-      if (sessionRef.current !== expectedSession || !activeRef.current) return;
+      const runtime = runtimeRef.current;
+      await runtime.cacheReady;
+      if (runtimeRef.current !== runtime || !activeRef.current) return;
       const cached: Record<string, string> = {};
       for (const id of ids) {
         const sourceBlock = blocksById.get(id);
@@ -347,43 +361,45 @@ export function useDocumentTranslation({
               : null;
         if (
           !block ||
-          completed.current.has(id) ||
-          inFlight.current.has(id) ||
-          failed.current.has(id) ||
-          pending.current.has(id)
+          runtime.completed.has(id) ||
+          runtime.inFlight.has(id) ||
+          runtime.failed.has(id) ||
+          runtime.pending.has(id)
         ) {
           continue;
         }
-        const cachedMarkdown = cache.current[blockCacheKey(block)];
+        const cachedMarkdown = runtime.cache[blockCacheKey(block)];
         if (cachedMarkdown) {
-          completed.current.add(id);
+          runtime.completed.add(id);
           cached[id] = cachedMarkdown;
         } else {
-          pending.current.set(id, block);
+          runtime.pending.set(id, block);
         }
       }
       if (Object.keys(cached).length > 0) {
         setTranslations((current) => ({ ...current, ...cached }));
       }
-      refreshProgress();
+      refreshProgress(runtime);
       void drainQueue();
     },
     [blocksById, drainQueue, paper, refreshProgress],
   );
 
   const retryFailed = useCallback(() => {
-    for (const block of failed.current.values())
-      pending.current.set(block.id, block);
-    failed.current.clear();
+    const runtime = runtimeRef.current;
+    for (const block of runtime.failed.values())
+      runtime.pending.set(block.id, block);
+    runtime.failed.clear();
     setError(null);
-    refreshProgress();
+    refreshProgress(runtime);
     void drainQueue();
   }, [drainQueue, refreshProgress]);
 
   const cancel = useCallback(() => {
-    controller.current?.abort();
-    pending.current.clear();
-    refreshProgress();
+    const runtime = runtimeRef.current;
+    runtime.controller?.abort();
+    runtime.pending.clear();
+    refreshProgress(runtime);
   }, [refreshProgress]);
 
   return {

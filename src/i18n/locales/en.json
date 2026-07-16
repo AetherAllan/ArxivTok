@@ -23,11 +23,16 @@
     "selectedChange": "{{count}} selected · Change",
     "loadFeedFailed": "Couldn't load feed",
     "unknownError": "Unknown error",
+    "operationFailed": "Operation failed",
     "failedLoadPapers": "Failed to load papers",
     "loadingMore": "Loading more…",
     "retryMore": "Retry loading",
     "endOfFeed": "You're all caught up",
     "closeMenu": "Close menu"
+  },
+  "recovery": {
+    "title": "Local data was recovered",
+    "body": "Some local data could not be loaded. Paprism continued with safe defaults; the affected local items may need to be configured or saved again."
   },
   "menu": {
     "title": "Menu",
@@ -108,6 +113,8 @@
     "clear": "Clear",
     "unsave": "Remove",
     "downloadFailed": "Download failed",
+    "pdfMetadataFailedTitle": "PDF saved with a warning",
+    "pdfMetadataFailedBody": "The PDF was saved, but Paprism could not remember this download. You can still find it in the folder you selected.",
     "downloadChoiceTitle": "Download paper",
     "downloadOffline": "Offline reader",
     "readerPackage": "Reader",

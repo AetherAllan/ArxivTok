@@ -40,9 +40,8 @@ jobs:
 
       - name: Verify source
         run: |
-          bun test
+          bun run check
           bun test ./.github/scripts/release-version.test.js
-          bun run typecheck
           git diff --exit-code
 
       - uses: expo/expo-github-action@v8

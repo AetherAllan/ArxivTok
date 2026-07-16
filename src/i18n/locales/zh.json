@@ -23,11 +23,16 @@
     "selectedChange": "已选 {{count}} 项 · 更换",
     "loadFeedFailed": "无法加载信息流",
     "unknownError": "未知错误",
+    "operationFailed": "操作失败",
     "failedLoadPapers": "加载论文失败",
     "loadingMore": "正在加载更多…",
     "retryMore": "重试加载",
     "endOfFeed": "已经看完了",
     "closeMenu": "关闭菜单"
+  },
+  "recovery": {
+    "title": "本地数据已降级恢复",
+    "body": "部分本地数据无法读取。Paprism 已使用安全默认值继续启动；受影响的内容可能需要重新设置或保存。"
   },
   "menu": {
     "title": "菜单",
@@ -108,6 +113,8 @@
     "clear": "清空",
     "unsave": "移除",
     "downloadFailed": "下载失败",
+    "pdfMetadataFailedTitle": "PDF 已保存，但有一项警告",
+    "pdfMetadataFailedBody": "PDF 已保存，但 Paprism 无法记录这次下载。你仍可在所选文件夹中找到它。",
     "downloadChoiceTitle": "下载论文",
     "downloadOffline": "离线阅读包",
     "readerPackage": "阅读包",

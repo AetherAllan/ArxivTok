@@ -28,6 +28,7 @@ export function usePaperFeed(categories: string[]) {
   const categoriesRef = useRef(normalizeCategories(categories));
   const papersLen = useRef(0);
   const generation = useRef(0);
+  const requestController = useRef<AbortController | null>(null);
   const key = catsKey(categories);
 
   useEffect(() => {
@@ -45,6 +46,8 @@ export function usePaperFeed(categories: string[]) {
     }
 
     const gen = generation.current;
+    const controller = new AbortController();
+    requestController.current = controller;
     inFlight.current = true;
     if (isReset || papersLen.current === 0) {
       setStatus("loading");
@@ -60,6 +63,7 @@ export function usePaperFeed(categories: string[]) {
         categories: categoriesRef.current,
         start,
         maxResults: ARXIV_PAGE_SIZE,
+        signal: controller.signal,
       });
 
       if (gen !== generation.current) return;
@@ -87,6 +91,7 @@ export function usePaperFeed(categories: string[]) {
       );
     } catch (e) {
       if (gen !== generation.current) return;
+      if (e instanceof Error && e.name === "AbortError") return;
       const msg =
         e instanceof Error ? e.message : i18n.t("common.failedLoadPapers");
       if (papersLen.current === 0) {
@@ -99,12 +104,16 @@ export function usePaperFeed(categories: string[]) {
     } finally {
       if (gen === generation.current) {
         inFlight.current = false;
+        if (requestController.current === controller) {
+          requestController.current = null;
+        }
       }
     }
   }, []);
 
   useEffect(() => {
-    categoriesRef.current = normalizeCategories(categories);
+    requestController.current?.abort();
+    categoriesRef.current = key ? key.split("|") : normalizeCategories([]);
     generation.current += 1;
     inFlight.current = false;
     seenIds.current = new Set();
@@ -118,6 +127,7 @@ export function usePaperFeed(categories: string[]) {
     setPaginationError(null);
 
     void loadMore(true);
+    return () => requestController.current?.abort();
   }, [key, loadMore]);
 
   useEffect(() => {

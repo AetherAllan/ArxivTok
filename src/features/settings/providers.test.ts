@@ -2,10 +2,14 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 const asyncValues = new Map<string, string>();
 const secureValues = new Map<string, string>();
+let failReads = false;
 
 mock.module("@react-native-async-storage/async-storage", () => ({
   default: {
-    getItem: async (key: string) => asyncValues.get(key) ?? null,
+    getItem: async (key: string) => {
+      if (failReads) throw new Error("storage unavailable");
+      return asyncValues.get(key) ?? null;
+    },
     setItem: async (key: string, value: string) =>
       void asyncValues.set(key, value),
     removeItem: async (key: string) => void asyncValues.delete(key),
@@ -32,6 +36,7 @@ describe("provider secret ownership", () => {
   beforeEach(() => {
     asyncValues.clear();
     secureValues.clear();
+    failReads = false;
   });
 
   test("stores API keys only in SecureStore", async () => {
@@ -88,6 +93,13 @@ describe("provider secret ownership", () => {
       ]),
     );
     const state = await loadProviderState();
+    expect(state.profiles.map((profile) => profile.id)).toEqual(["google-web"]);
+  });
+
+  test("reports recovery while keeping the built-in provider usable", async () => {
+    failReads = true;
+    const state = await loadProviderState();
+    expect(state.recovered).toBe(true);
     expect(state.profiles.map((profile) => profile.id)).toEqual(["google-web"]);
   });
 });

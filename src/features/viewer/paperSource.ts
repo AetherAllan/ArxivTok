@@ -69,7 +69,7 @@ export async function fetchPaperHtml(
       clearTimeout(timeout);
       outerSignal?.removeEventListener("abort", abort);
     }
-  });
+  }, outerSignal);
 }
 
 export async function loadPaperDocument(

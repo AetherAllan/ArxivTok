@@ -8,15 +8,17 @@ export class RateLimiter {
 
   constructor(private readonly minIntervalMs: number) {}
 
-  schedule<T>(fn: () => Promise<T>): Promise<T> {
+  schedule<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     const run = async (): Promise<T> => {
+      throwIfAborted(signal);
       const wait = Math.max(
         0,
         this.minIntervalMs - (Date.now() - this.lastStart),
       );
       if (wait > 0) {
-        await sleep(wait);
+        await sleep(wait, signal);
       }
+      throwIfAborted(signal);
       this.lastStart = Date.now();
       return fn();
     };
@@ -31,6 +33,27 @@ export class RateLimiter {
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function abortError(): Error {
+  const error = new Error("Aborted");
+  error.name = "AbortError";
+  return error;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw abortError();
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timeout);
+      reject(abortError());
+    };
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }

@@ -21,6 +21,8 @@
   <a href="#quick-start">Quick start</a>
   ·
   <a href="#what-you-can-do">Features</a>
+  ·
+  <a href="Roadmap/ios.md">iOS roadmap</a>
 </p>
 
 ## Research should feel browsable
@@ -105,10 +107,15 @@ On-demand translation + local library
 ## Development
 
 ```bash
-bun test
-bun run typecheck
-bun run format
+bun run check
 ```
+
+Use `bun run format` to apply formatting. Pull requests and pushes to `main`
+run type checking, ESLint, unit tests, formatting checks, and Expo Doctor.
+
+`app.json` owns the static Expo configuration. `app.config.js` only reads that
+file and derives the public app version from `package.json`, which remains the
+single version source used by the release workflow.
 
 The source is organized by product feature:
 
@@ -164,6 +171,7 @@ See [the release notes](Roadmap/release.md) for the artifact design.
 
 - [Native bilingual reader architecture](Roadmap/immersive-translation.md)
 - [APK packaging and release verification](Roadmap/release.md)
+- [iOS support and TestFlight readiness](Roadmap/ios.md)
 
 ## License
 

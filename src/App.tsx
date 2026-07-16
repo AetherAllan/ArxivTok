@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, StyleSheet } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -12,7 +12,7 @@ import {
   LibraryScreen,
   type LibrarySection,
 } from "@/features/library/LibraryScreen";
-import { useLibrary } from "@/features/library/useLibrary";
+import { PdfMetadataError, useLibrary } from "@/features/library/useLibrary";
 import { AppMenu } from "@/features/menu/AppMenu";
 import { SearchScreen } from "@/features/search/SearchScreen";
 import {
@@ -40,6 +40,8 @@ export default function App() {
   const {
     ready: prefsReady,
     prefs,
+    recoveryWarning: prefsRecoveryWarning,
+    clearRecoveryWarning: clearPrefsRecoveryWarning,
     setCategories,
     setTranslateLang,
     setUiLang,
@@ -50,9 +52,16 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<AppSection | null>(null);
   const [viewer, setViewer] = useState<ViewerState | null>(null);
   const providerManager = useProviderProfiles();
+  const {
+    ready: providerReady,
+    recoveryWarning: providerRecoveryWarning,
+    clearRecoveryWarning: clearProviderRecoveryWarning,
+  } = providerManager;
 
   const {
     ready: libraryReady,
+    recoveryWarning: libraryRecoveryWarning,
+    clearRecoveryWarning: clearLibraryRecoveryWarning,
     saved,
     history,
     downloads,
@@ -74,6 +83,25 @@ export default function App() {
   } = useLibrary();
   const feed = usePaperFeed(prefs.categories);
   const visibleFeedPaper = feed.papers[feed.index];
+  const recoveryAlertShown = useRef(false);
+
+  const showError = useCallback(
+    (error: unknown) => {
+      if (error instanceof Error && error.name === "AbortError") return;
+      if (error instanceof PdfMetadataError) {
+        Alert.alert(
+          t("library.pdfMetadataFailedTitle"),
+          t("library.pdfMetadataFailedBody"),
+        );
+        return;
+      }
+      Alert.alert(
+        t("common.operationFailed"),
+        error instanceof Error ? error.message : t("common.unknownError"),
+      );
+    },
+    [t],
+  );
 
   useEffect(() => {
     if (!libraryReady || !visibleFeedPaper) return;
@@ -81,38 +109,63 @@ export default function App() {
     // a prefetched page must not make the current paper look newly viewed. We
     // also wait for persisted history to load so this write cannot be replaced
     // by useLibrary's initial hydration.
-    void recordHistory(visibleFeedPaper);
-  }, [libraryReady, visibleFeedPaper?.arxivId, recordHistory]);
+    void recordHistory(visibleFeedPaper).catch(showError);
+  }, [libraryReady, visibleFeedPaper, recordHistory, showError]);
 
   const openPaper = useCallback(
     (paper: Paper) => {
-      void recordHistory(paper);
+      void recordHistory(paper).catch(showError);
       // Keep the originating section mounted under the native viewer. This
       // preserves its list and scroll position without a second navigation
       // state that can drift out of sync.
       setViewer({ paper });
     },
-    [recordHistory],
+    [recordHistory, showError],
   );
 
   const openOffline = useCallback(
     (entry: OfflinePaperEntry) => {
-      void recordHistory(entry);
+      void recordHistory(entry).catch(showError);
       setViewer({ paper: entry, sourceUri: entry.entryUri });
     },
-    [recordHistory],
+    [recordHistory, showError],
   );
 
-  const showError = useCallback(
-    (error: unknown) => {
-      if (error instanceof Error && error.name === "AbortError") return;
-      Alert.alert(
-        t("library.downloadFailed"),
-        error instanceof Error ? error.message : t("common.unknownError"),
-      );
-    },
-    [t],
-  );
+  useEffect(() => {
+    if (
+      recoveryAlertShown.current ||
+      !prefsReady ||
+      !libraryReady ||
+      !providerReady ||
+      (!prefsRecoveryWarning &&
+        !libraryRecoveryWarning &&
+        !providerRecoveryWarning)
+    ) {
+      return;
+    }
+    recoveryAlertShown.current = true;
+    Alert.alert(t("recovery.title"), t("recovery.body"), [
+      {
+        text: t("common.done"),
+        onPress: () => {
+          clearPrefsRecoveryWarning();
+          clearLibraryRecoveryWarning();
+          clearProviderRecoveryWarning();
+        },
+      },
+    ]);
+  }, [
+    clearLibraryRecoveryWarning,
+    clearPrefsRecoveryWarning,
+    clearProviderRecoveryWarning,
+    libraryReady,
+    libraryRecoveryWarning,
+    prefsReady,
+    prefsRecoveryWarning,
+    providerReady,
+    providerRecoveryWarning,
+    t,
+  ]);
 
   const onDownload = useCallback(
     (paper: Paper) => {
@@ -168,7 +221,7 @@ export default function App() {
     [openPdf, showError],
   );
 
-  if (!prefsReady || !libraryReady || !providerManager.ready) {
+  if (!prefsReady || !libraryReady || !providerReady) {
     return (
       <SafeAreaProvider>
         <GestureHandlerRootView style={styles.root}>
@@ -201,7 +254,7 @@ export default function App() {
           hasPdf={hasPdf}
           downloadingId={downloadingId}
           canCancelDownload={canCancelDownload}
-          onToggleSave={toggleSave}
+          onToggleSave={(paper) => void toggleSave(paper).catch(showError)}
           onDownload={onDownload}
           onCancelDownload={cancelDownload}
         />
@@ -217,8 +270,8 @@ export default function App() {
           saved={saved}
           history={history}
           downloads={downloads}
-          onUnsave={unsave}
-          onClearHistory={clearHistory}
+          onUnsave={(arxivId) => void unsave(arxivId).catch(showError)}
+          onClearHistory={() => void clearHistory().catch(showError)}
           onOpenPaper={(paper) => {
             openPaper(paper);
           }}
@@ -226,7 +279,9 @@ export default function App() {
             openOffline(entry);
           }}
           onOpenPdf={(entry) => void onOpenPdf(entry)}
-          onDeleteDownloads={(arxivId) => void deleteDownloads(arxivId)}
+          onDeleteDownloads={(arxivId) =>
+            void deleteDownloads(arxivId).catch(showError)
+          }
           onBack={openMenu}
         />
         <SearchScreen
@@ -236,7 +291,7 @@ export default function App() {
           hasOfflinePaper={hasOfflinePaper}
           hasPdf={hasPdf}
           onRead={openPaper}
-          onToggleSave={toggleSave}
+          onToggleSave={(paper) => void toggleSave(paper).catch(showError)}
           onDownload={onDownload}
           onBack={openMenu}
         />

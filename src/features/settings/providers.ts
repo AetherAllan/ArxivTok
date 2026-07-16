@@ -27,6 +27,8 @@ export type ProviderState = {
   activeProfileId: string | null;
 };
 
+export type LoadedProviderState = ProviderState & { recovered: boolean };
+
 function validProfiles(value: unknown): ProviderProfile[] {
   return Array.isArray(value)
     ? value
@@ -46,9 +48,10 @@ function validProfiles(value: unknown): ProviderProfile[] {
     : [];
 }
 
-export async function loadProviderState(): Promise<ProviderState> {
+export async function loadProviderState(): Promise<LoadedProviderState> {
   let rawProfiles: string | null = null;
   let activeProfileId: string | null = null;
+  let recovered = false;
   try {
     [rawProfiles, activeProfileId] = await Promise.all([
       AsyncStorage.getItem(PROFILES_KEY),
@@ -57,12 +60,14 @@ export async function loadProviderState(): Promise<ProviderState> {
   } catch {
     // Translation settings must never keep the rest of the app on its loading
     // screen. The built-in Google profile remains a safe usable fallback.
+    recovered = true;
   }
   let profiles: ProviderProfile[] = [];
   try {
     profiles = validProfiles(JSON.parse(rawProfiles ?? "[]") as unknown);
   } catch {
     // A corrupt profile list should disable translation, not block app startup.
+    recovered = true;
   }
   // Google is a built-in, keyless option. Recreate it from code on every load
   // so persisted data cannot change its fixed endpoint.
@@ -75,6 +80,7 @@ export async function loadProviderState(): Promise<ProviderState> {
     activeProfileId: profiles.some((profile) => profile.id === activeProfileId)
       ? activeProfileId
       : (profiles[0]?.id ?? null),
+    recovered,
   };
 }
 

@@ -18,13 +18,15 @@ export function useProviderProfiles() {
     null,
   );
   const [ready, setReady] = useState(false);
+  const [recoveryWarning, setRecoveryWarning] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    loadProviderState().then((state) => {
+    void loadProviderState().then((state) => {
       if (cancelled) return;
       setProfiles(state.profiles);
       setActiveProfileIdState(state.activeProfileId);
+      setRecoveryWarning(state.recovered);
       setReady(true);
     });
     return () => {
@@ -79,9 +81,12 @@ export function useProviderProfiles() {
     },
     [profiles],
   );
+  const clearRecoveryWarning = useCallback(() => setRecoveryWarning(false), []);
 
   return {
     ready,
+    recoveryWarning,
+    clearRecoveryWarning,
     profiles,
     activeProfileId,
     activeProfile: useMemo(

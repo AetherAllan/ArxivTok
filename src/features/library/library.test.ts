@@ -2,9 +2,13 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Paper } from "@/types/paper";
 
 const values = new Map<string, string>();
+let failKey: string | null = null;
 mock.module("@react-native-async-storage/async-storage", () => ({
   default: {
-    getItem: async (key: string) => values.get(key) ?? null,
+    getItem: async (key: string) => {
+      if (key === failKey) throw new Error("storage unavailable");
+      return values.get(key) ?? null;
+    },
     setItem: async (key: string, value: string) => {
       values.set(key, value);
     },
@@ -14,7 +18,7 @@ mock.module("@react-native-async-storage/async-storage", () => ({
   },
 }));
 
-const { HISTORY_CAP, loadPdfDownloads, upsertHistory } =
+const { HISTORY_CAP, loadLibraryState, loadPdfDownloads, upsertHistory } =
   await import("./library");
 
 const paper = (arxivId: string): Paper => ({
@@ -29,7 +33,10 @@ const paper = (arxivId: string): Paper => ({
 });
 
 describe("download metadata migration", () => {
-  beforeEach(() => values.clear());
+  beforeEach(() => {
+    values.clear();
+    failKey = null;
+  });
 
   test("moves legacy PDF rows without retaining duplicate Paper fields", async () => {
     values.set(
@@ -58,6 +65,26 @@ describe("download metadata migration", () => {
     expect(
       JSON.parse(values.get("paprism.pdfDownloads") ?? "[]")[0],
     ).not.toHaveProperty("id");
+  });
+});
+
+describe("library recovery", () => {
+  test("loads healthy tables and falls back only for the failed table", async () => {
+    values.set(
+      "paprism.saved",
+      JSON.stringify([{ ...paper("saved"), savedAt: 1 }]),
+    );
+    values.set(
+      "paprism.history",
+      JSON.stringify([{ ...paper("history"), viewedAt: 2 }]),
+    );
+    failKey = "paprism.pdfDownloads";
+
+    const state = await loadLibraryState();
+    expect(state.recovered).toBe(true);
+    expect(state.saved.map((item) => item.arxivId)).toEqual(["saved"]);
+    expect(state.history.map((item) => item.arxivId)).toEqual(["history"]);
+    expect(state.pdfDownloads).toEqual([]);
   });
 });
 

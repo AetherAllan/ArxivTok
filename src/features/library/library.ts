@@ -36,13 +36,17 @@ export type DownloadSummary = Paper & {
   pdf?: PdfDownloadEntry;
 };
 
+export type LoadedLibraryState = {
+  saved: SavedEntry[];
+  history: HistoryEntry[];
+  offlinePapers: OfflinePaperEntry[];
+  pdfDownloads: PdfDownloadEntry[];
+  recovered: boolean;
+};
+
 async function readJson<T>(key: string, fallback: T): Promise<T> {
-  try {
-    const raw = await AsyncStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
+  const raw = await AsyncStorage.getItem(key);
+  return raw ? (JSON.parse(raw) as T) : fallback;
 }
 
 async function writeJson(key: string, value: unknown): Promise<void> {
@@ -112,12 +116,7 @@ export async function loadPdfDownloads(): Promise<PdfDownloadEntry[]> {
   const current = await AsyncStorage.getItem(KEYS.pdfDownloads);
   const legacy =
     current === null ? await AsyncStorage.getItem(KEYS.legacyDownloads) : null;
-  let parsed: unknown = [];
-  try {
-    parsed = JSON.parse(current ?? legacy ?? "[]") as unknown;
-  } catch {
-    // Corrupt download metadata must not prevent the rest of the library loading.
-  }
+  const parsed = JSON.parse(current ?? legacy ?? "[]") as unknown;
   const entries = records(parsed)
     .map(coercePdf)
     .filter((item) => item !== null);
@@ -159,6 +158,24 @@ export async function loadOfflinePapers(): Promise<OfflinePaperEntry[]> {
   return records(await readJson<unknown>(KEYS.offlinePapers, []))
     .map(coerceOfflinePaper)
     .filter((item) => item !== null);
+}
+
+export async function loadLibraryState(): Promise<LoadedLibraryState> {
+  const results = await Promise.allSettled([
+    loadSaved(),
+    loadHistory(),
+    loadOfflinePapers(),
+    loadPdfDownloads(),
+  ] as const);
+  const [saved, history, offlinePapers, pdfDownloads] = results;
+  return {
+    saved: saved.status === "fulfilled" ? saved.value : [],
+    history: history.status === "fulfilled" ? history.value : [],
+    offlinePapers:
+      offlinePapers.status === "fulfilled" ? offlinePapers.value : [],
+    pdfDownloads: pdfDownloads.status === "fulfilled" ? pdfDownloads.value : [],
+    recovered: results.some((result) => result.status === "rejected"),
+  };
 }
 
 export async function persistSaved(list: SavedEntry[]): Promise<void> {

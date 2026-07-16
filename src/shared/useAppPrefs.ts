@@ -14,16 +14,33 @@ import {
 export function useAppPrefs() {
   const [ready, setReady] = useState(false);
   const [prefs, setPrefs] = useState<AppPrefs>(DEFAULT_PREFS);
+  const [recoveryWarning, setRecoveryWarning] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    loadPrefs().then(async (loaded) => {
-      if (cancelled) return;
-      await i18n.changeLanguage(resolveUiLang(loaded.uiLang));
+    void (async () => {
+      let loaded: AppPrefs = {
+        ...DEFAULT_PREFS,
+        categories: [...DEFAULT_PREFS.categories],
+      };
+      let recovered = false;
+      try {
+        loaded = await loadPrefs();
+      } catch {
+        recovered = true;
+      }
+      try {
+        await i18n.changeLanguage(resolveUiLang(loaded.uiLang));
+      } catch {
+        // Keep i18next's already initialized language. A locale backend error
+        // must not strand the whole application on its loading screen.
+        recovered = true;
+      }
       if (cancelled) return;
       setPrefs(loaded);
+      setRecoveryWarning(recovered);
       setReady(true);
-    });
+    })();
     return () => {
       cancelled = true;
     };
@@ -50,9 +67,12 @@ export function useAppPrefs() {
     setPrefs(next);
     await i18n.changeLanguage(resolveUiLang(next.uiLang));
   }, []);
+  const clearRecoveryWarning = useCallback(() => setRecoveryWarning(false), []);
 
   return {
     ready,
+    recoveryWarning,
+    clearRecoveryWarning,
     prefs,
     setCategories,
     setTranslateLang,

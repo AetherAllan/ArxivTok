@@ -1,3 +1,5 @@
+import { DomUtils, parseDocument } from "htmlparser2";
+import { isTag, type ChildNode, type Element } from "domhandler";
 import type { Paper } from "../types/paper";
 import { RateLimiter } from "./rateLimiter";
 import { categoriesToSearchQuery } from "@/lib/categories";
@@ -11,8 +13,11 @@ const USER_AGENT = "Paprism/1.0 (Android; educational; contact: local-dev)";
 const limiter = new RateLimiter(MIN_GAP_MS);
 
 /** Shared with PDF downloads so we stay within arXiv ToU. */
-export function scheduleArxiv<T>(fn: () => Promise<T>): Promise<T> {
-  return limiter.schedule(fn);
+export function scheduleArxiv<T>(
+  fn: () => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  return limiter.schedule(fn, signal);
 }
 
 export type FetchPageOptions = {
@@ -22,6 +27,7 @@ export type FetchPageOptions = {
   maxResults?: number;
   query?: string;
   sortBy?: "relevance" | "lastUpdatedDate" | "submittedDate";
+  signal?: AbortSignal;
 };
 
 export async function fetchPaperPage(options: FetchPageOptions = {}): Promise<{
@@ -35,6 +41,7 @@ export async function fetchPaperPage(options: FetchPageOptions = {}): Promise<{
     maxResults = ARXIV_PAGE_SIZE,
     query,
     sortBy = "submittedDate",
+    signal,
   } = options;
 
   const searchQuery = query ?? categoriesToSearchQuery(categories);
@@ -55,6 +62,7 @@ export async function fetchPaperPage(options: FetchPageOptions = {}): Promise<{
         Accept: "application/atom+xml",
         "User-Agent": USER_AGENT,
       },
+      signal,
     });
 
     if (!res.ok) {
@@ -63,23 +71,32 @@ export async function fetchPaperPage(options: FetchPageOptions = {}): Promise<{
 
     const xml = await res.text();
     return parseAtomFeed(xml, start);
-  });
+  }, signal);
 }
 
-function parseAtomFeed(
+export function parseAtomFeed(
   xml: string,
   start: number,
 ): { papers: Paper[]; total: number; start: number } {
-  const totalMatch = xml.match(/opensearch:totalResults[^>]*>(\d+)/i);
-  const total = totalMatch ? Number(totalMatch[1]) : 0;
-
-  const entries = xml.match(/<entry>[\s\S]*?<\/entry>/g) ?? [];
+  const document = parseDocument(xml, { xmlMode: true, decodeEntities: true });
+  const totalNode = findElements(
+    document.children,
+    (element) => localName(element) === "totalResults",
+  )[0];
+  const parsedTotal = totalNode
+    ? Number(clean(DomUtils.textContent(totalNode)))
+    : 0;
+  const total = Number.isFinite(parsedTotal) ? parsedTotal : 0;
+  const entries = findElements(
+    document.children,
+    (element) => localName(element) === "entry",
+  );
   const papers = entries.map(parseEntry).filter((p): p is Paper => p !== null);
 
   return { papers, total, start };
 }
 
-function parseEntry(entry: string): Paper | null {
+function parseEntry(entry: Element): Paper | null {
   const idRaw = textOf(entry, "id");
   if (!idRaw) return null;
 
@@ -92,20 +109,24 @@ function parseEntry(entry: string): Paper | null {
   const updated = textOf(entry, "updated") ?? published;
 
   const authors: string[] = [];
-  const authorBlocks = entry.match(/<author>[\s\S]*?<\/author>/g) ?? [];
+  const authorBlocks = findElements(
+    entry.children,
+    (element) => localName(element) === "author",
+  );
   for (const block of authorBlocks) {
     const name = textOf(block, "name");
     if (name) authors.push(clean(name));
   }
 
-  const categories: string[] = [];
-  const catRe = /<category[^>]*\bterm="([^"]+)"/g;
-  let m: RegExpExecArray | null;
-  while ((m = catRe.exec(entry)) !== null) {
-    if (m[1] && !m[1].startsWith("http")) {
-      categories.push(m[1]);
-    }
-  }
+  const categories = findElements(
+    entry.children,
+    (element) => localName(element) === "category",
+  )
+    .map((element) => element.attribs.term)
+    .filter(
+      (term): term is string =>
+        !!term && !term.toLowerCase().startsWith("http"),
+    );
 
   return {
     arxivId,
@@ -119,24 +140,29 @@ function parseEntry(entry: string): Paper | null {
   };
 }
 
-function textOf(xml: string, tag: string): string | null {
-  const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i");
-  const match = xml.match(re);
-  return match ? decodeXml(match[1].trim()) : null;
+function localName(element: Element): string {
+  return element.name.split(":").at(-1) ?? element.name;
 }
 
-function decodeXml(s: string): string {
-  return s
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) =>
-      String.fromCharCode(parseInt(h, 16)),
-    );
+function findElements(
+  nodes: ChildNode[],
+  predicate: (element: Element) => boolean,
+  output: Element[] = [],
+): Element[] {
+  for (const node of nodes) {
+    if (!isTag(node)) continue;
+    if (predicate(node)) output.push(node);
+    findElements(node.children, predicate, output);
+  }
+  return output;
+}
+
+function textOf(element: Element, tag: string): string | null {
+  const match = findElements(
+    element.children,
+    (child) => localName(child) === tag,
+  )[0];
+  return match ? DomUtils.textContent(match).trim() : null;
 }
 
 function clean(s: string): string {
@@ -145,11 +171,15 @@ function clean(s: string): string {
 
 /** http://arxiv.org/abs/2301.00001v1 → 2301.00001v1 */
 function normalizeArxivId(idUrl: string): string | null {
-  const m = idUrl.match(/arxiv\.org\/abs\/([^\s/?#]+)/i);
-  if (m) return m[1];
-  const bare = idUrl.trim();
-  if (/^\d{4}\.\d{4,5}(v\d+)?$/.test(bare) || /^[a-z-]+\/\d+/i.test(bare)) {
-    return bare;
+  // Legacy identifiers contain one slash (for example hep-th/9901001), while
+  // query strings and fragments are never part of the arXiv identifier.
+  const m = idUrl.match(/arxiv\.org\/abs\/([^\s?#]+)/i);
+  const candidate = m?.[1] ?? idUrl.trim();
+  if (
+    /^\d{4}\.\d{4,5}(v\d+)?$/.test(candidate) ||
+    /^[a-z-]+(?:\.[a-z]{2})?\/\d{7}(v\d+)?$/i.test(candidate)
+  ) {
+    return candidate;
   }
   return null;
 }

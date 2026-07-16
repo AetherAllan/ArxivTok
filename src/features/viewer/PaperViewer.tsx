@@ -225,6 +225,7 @@ export function PaperViewer({
     targetLang,
     getProviderApiKey,
   });
+  const enqueueTranslation = translation.enqueue;
   enqueueRef.current = translation.enqueue;
   documentRef.current = document;
 
@@ -289,8 +290,8 @@ export function PaperViewer({
       visibleIds.current.length > 0
         ? visibleIds.current
         : document.blocks.slice(0, 8).map((block) => block.id);
-    void translation.enqueue([PAPER_TITLE_TRANSLATION_ID, ...ids]);
-  }, [document, mode, translation.enqueue]);
+    void enqueueTranslation([PAPER_TITLE_TRANSLATION_ID, ...ids]);
+  }, [document, enqueueTranslation, mode]);
 
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken<PaperBlock>[] }) => {

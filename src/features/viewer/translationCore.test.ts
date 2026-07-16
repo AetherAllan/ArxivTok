@@ -84,12 +84,37 @@ describe("translation protocol", () => {
     ).toHaveLength(2);
     expect(() =>
       parseTranslationResponse('[{"id":"a::0","text":"A"}]', ids),
-    ).toThrow("every requested block");
+    ).toThrow("missing requested id");
     expect(() =>
       parseTranslationResponse(
         '[{"id":"a::0","text":"A"},{"id":"a::0","text":"again"}]',
         ids,
       ),
-    ).toThrow("every requested block");
+    ).toThrow("duplicate id");
+  });
+
+  test("rejects unexpected, malformed, and empty rows", () => {
+    const ids = new Set(["a"]);
+    expect(() =>
+      parseTranslationResponse(
+        '[{"id":"a","text":"A"},{"id":"extra","text":"X"}]',
+        ids,
+      ),
+    ).toThrow("unexpected id");
+    expect(() =>
+      parseTranslationResponse('[{"id":"a","value":"A"}]', ids),
+    ).toThrow("invalid translation row");
+    expect(() =>
+      parseTranslationResponse('[{"id":"a","text":"   "}]', ids),
+    ).toThrow("empty text");
+  });
+
+  test("accepts requested rows in a different order", () => {
+    expect(
+      parseTranslationResponse(
+        '[{"id":"b","text":"B"},{"id":"a","text":"A"}]',
+        new Set(["a", "b"]),
+      ).map((result) => result.id),
+    ).toEqual(["b", "a"]);
   });
 });

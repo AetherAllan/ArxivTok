@@ -116,20 +116,34 @@ export function parseTranslationResponse(
       : null;
   if (!Array.isArray(rows))
     throw new Error("Model response is not a translation array");
-  const results = rows.filter(
-    (row): row is TranslationResult =>
-      !!row &&
-      typeof row === "object" &&
-      typeof row.id === "string" &&
-      typeof row.text === "string" &&
-      expectedIds.has(row.id),
-  );
-  const uniqueIds = new Set(results.map((result) => result.id));
-  if (
-    results.length !== expectedIds.size ||
-    uniqueIds.size !== expectedIds.size
-  ) {
-    throw new Error("Model response did not include every requested block");
+  const seen = new Set<string>();
+  const results: TranslationResult[] = [];
+  for (const row of rows) {
+    if (
+      !row ||
+      typeof row !== "object" ||
+      typeof (row as { id?: unknown }).id !== "string" ||
+      typeof (row as { text?: unknown }).text !== "string"
+    ) {
+      throw new Error("Model response contains an invalid translation row");
+    }
+    const result = row as TranslationResult;
+    if (!expectedIds.has(result.id)) {
+      throw new Error(`Model response contains an unexpected id: ${result.id}`);
+    }
+    if (seen.has(result.id)) {
+      throw new Error(`Model response contains a duplicate id: ${result.id}`);
+    }
+    if (!result.text.trim()) {
+      throw new Error(`Model response contains empty text for: ${result.id}`);
+    }
+    seen.add(result.id);
+    results.push(result);
+  }
+  for (const id of expectedIds) {
+    if (!seen.has(id)) {
+      throw new Error(`Model response is missing requested id: ${id}`);
+    }
   }
   return results;
 }

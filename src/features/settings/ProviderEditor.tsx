@@ -47,6 +47,7 @@ export function ProviderEditor({
   const isExisting = draft
     ? manager.profiles.some((profile) => profile.id === draft.id)
     : false;
+  const getApiKey = manager.getApiKey;
 
   useEffect(() => {
     if (!draft || !isExisting) {
@@ -55,7 +56,7 @@ export function ProviderEditor({
     }
 
     let cancelled = false;
-    void manager.getApiKey(draft.id).then(
+    void getApiKey(draft.id).then(
       (key) => {
         // Only the existence bit enters React state. The secret itself remains
         // owned by SecureStore and is never copied into the editable field.
@@ -68,7 +69,7 @@ export function ProviderEditor({
     return () => {
       cancelled = true;
     };
-  }, [draft, isExisting, manager.getApiKey]);
+  }, [draft, getApiKey, isExisting]);
 
   const visibleModels = useMemo(
     () => searchModels(models, query).slice(0, 50),
