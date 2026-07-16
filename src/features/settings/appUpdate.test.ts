@@ -51,4 +51,24 @@ describe("app updates", () => {
       fetchMock.mockRestore();
     }
   });
+
+  test("aborts an update request that exceeds its deadline", async () => {
+    const pendingFetch = (async (_input, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(new DOMException("Aborted", "AbortError"));
+        });
+      })) as typeof fetch;
+    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(
+      pendingFetch,
+    );
+    try {
+      await expect(fetchLatestRelease(undefined, 1)).rejects.toHaveProperty(
+        "name",
+        "AbortError",
+      );
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
 });

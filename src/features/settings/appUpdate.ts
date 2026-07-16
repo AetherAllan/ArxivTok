@@ -1,5 +1,6 @@
 export const LATEST_RELEASE_URL =
   "https://api.github.com/repos/AetherAllan/Paprism/releases/latest";
+const UPDATE_CHECK_TIMEOUT_MS = 15_000;
 
 export type ReleaseInfo = {
   version: string;
@@ -43,13 +44,25 @@ export function parseRelease(payload: unknown): ReleaseInfo | null {
 
 export async function fetchLatestRelease(
   signal?: AbortSignal,
+  timeoutMs = UPDATE_CHECK_TIMEOUT_MS,
 ): Promise<ReleaseInfo> {
-  const response = await fetch(LATEST_RELEASE_URL, {
-    signal,
-    headers: { Accept: "application/vnd.github+json" },
-  });
-  if (!response.ok) throw new Error(`GitHub HTTP ${response.status}`);
-  const release = parseRelease(await response.json());
-  if (!release) throw new Error("GitHub returned an invalid release");
-  return release;
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  if (signal?.aborted) cancel();
+  else signal?.addEventListener("abort", cancel, { once: true });
+  const timeout = setTimeout(cancel, timeoutMs);
+
+  try {
+    const response = await fetch(LATEST_RELEASE_URL, {
+      signal: controller.signal,
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!response.ok) throw new Error(`GitHub HTTP ${response.status}`);
+    const release = parseRelease(await response.json());
+    if (!release) throw new Error("GitHub returned an invalid release");
+    return release;
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener("abort", cancel);
+  }
 }

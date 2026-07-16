@@ -34,6 +34,8 @@ export function useAppUpdate() {
         release,
       });
     } catch {
+      // Only a launch or an explicit user action calls check(). There is no
+      // automatic retry after either a network failure or the request timeout.
       if (!nextController.signal.aborted) {
         setState({ status: "error", release: null });
       }
