@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 const asyncValues = new Map<string, string>();
 const secureValues = new Map<string, string>();
@@ -34,9 +34,10 @@ const {
   loadProviderState,
   persistAskProviderId,
   persistProviderState,
+  resetProviderState,
   setProviderApiKey,
 } = await import("./providers");
-const { saveEmbeddingProfile } =
+const { fetchEmbeddingModels, saveEmbeddingProfile } =
   await import("@/features/ask/embeddingProviders");
 
 describe("provider secret ownership", () => {
@@ -77,6 +78,39 @@ describe("provider secret ownership", () => {
     );
   });
 
+  test("resets custom providers, selections, and their secrets", async () => {
+    await setProviderApiKey("translation", "translation-secret");
+    await setProviderApiKey("ask-chat", "ask-secret");
+    await persistProviderState({
+      activeProfileId: "translation",
+      profiles: [
+        {
+          id: "translation",
+          name: "Translation",
+          kind: "openrouter",
+          baseUrl: "https://openrouter.ai/api/v1",
+          model: "translation-model",
+        },
+        {
+          id: "ask-chat",
+          name: "Ask",
+          kind: "openrouter",
+          baseUrl: "https://openrouter.ai/api/v1",
+          model: "ask-model",
+        },
+      ],
+    });
+    await persistAskProviderId("ask-chat");
+
+    await resetProviderState(["translation", "ask-chat"]);
+
+    expect(secureValues.size).toBe(0);
+    expect(await loadAskProviderId()).toBeNull();
+    expect(
+      (await loadProviderState()).profiles.map((profile) => profile.id),
+    ).toEqual(["google-web"]);
+  });
+
   test("stores the independent embedding key only in SecureStore", async () => {
     await saveEmbeddingProfile(
       {
@@ -92,6 +126,30 @@ describe("provider secret ownership", () => {
     expect([...asyncValues.values()].join(" ")).not.toContain(
       "embedding-secret",
     );
+  });
+
+  test("loads compatible embedding models through the shared provider catalog", async () => {
+    const fetchMock = spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ id: "embedding-model" }] })),
+    );
+    try {
+      const models = await fetchEmbeddingModels(
+        {
+          id: "embedding",
+          name: "Embedding",
+          kind: "openai-compatible",
+          baseUrl: "https://example.com/v1",
+          model: "embedding-model",
+        },
+        "secret",
+      );
+      expect(models.map((model) => model.id)).toEqual(["embedding-model"]);
+      expect(fetchMock.mock.calls[0]?.[0]).toBe(
+        "https://example.com/v1/models",
+      );
+    } finally {
+      fetchMock.mockRestore();
+    }
   });
 
   test("recreates the fixed Google profile instead of trusting stored data", async () => {

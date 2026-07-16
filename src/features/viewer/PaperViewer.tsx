@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   Linking,
@@ -35,6 +34,7 @@ import type { ProviderProfile } from "@/features/settings/providerCore";
 import { resolveTranslateLang, type TranslateLangPref } from "@/lib/storage";
 import { colors, radii } from "@/shared/theme";
 import type { Paper } from "@/types/paper";
+import { useAppDialog } from "@/shared/AppDialog";
 import { AskSheet } from "@/features/ask/AskSheet";
 import { useAskConversation } from "@/features/ask/useAskConversation";
 import type { AskSelection, EmbeddingProfile } from "@/features/ask/askTypes";
@@ -231,6 +231,7 @@ export function PaperViewer({
   onClose,
 }: Props) {
   const { t } = useTranslation();
+  const { showDialog } = useAppDialog();
   const insets = useSafeAreaInsets();
   const nativeReaderAvailable = hasNativeMarkdownRenderer();
   const list = useRef<FlatList<PaperBlock>>(null);
@@ -514,10 +515,14 @@ export function PaperViewer({
   const changeMode = useCallback(async () => {
     if (mode === "source") {
       if (!providerProfile) {
-        Alert.alert(t("translation.setupTitle"), t("translation.setupBody"), [
-          { text: t("common.cancel"), style: "cancel" },
-          { text: t("common.settings"), onPress: onOpenSettings },
-        ]);
+        showDialog({
+          title: t("translation.setupTitle"),
+          message: t("translation.setupBody"),
+          actions: [
+            { text: t("common.cancel"), style: "cancel" },
+            { text: t("common.settings"), onPress: onOpenSettings },
+          ],
+        });
         return;
       }
       let hasKey = providerProfile.kind === "google";
@@ -529,10 +534,14 @@ export function PaperViewer({
         }
       }
       if (!hasKey) {
-        Alert.alert(t("translation.setupTitle"), t("translation.setupBody"), [
-          { text: t("common.cancel"), style: "cancel" },
-          { text: t("common.settings"), onPress: onOpenSettings },
-        ]);
+        showDialog({
+          title: t("translation.setupTitle"),
+          message: t("translation.setupBody"),
+          actions: [
+            { text: t("common.cancel"), style: "cancel" },
+            { text: t("common.settings"), onPress: onOpenSettings },
+          ],
+        });
         return;
       }
       setMode("dual");
@@ -541,7 +550,7 @@ export function PaperViewer({
     } else {
       setMode("source");
     }
-  }, [getProviderApiKey, mode, onOpenSettings, providerProfile, t]);
+  }, [getProviderApiKey, mode, onOpenSettings, providerProfile, showDialog, t]);
 
   const askAvailable = askEnabled && Platform.OS === "android";
   const renderBlock = useCallback(

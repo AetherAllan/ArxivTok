@@ -1,12 +1,5 @@
 import { useEffect, useRef } from "react";
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Bookmark from "lucide-react-native/icons/bookmark";
 import Clock3 from "lucide-react-native/icons/clock-3";
 import Download from "lucide-react-native/icons/download";
@@ -14,6 +7,7 @@ import Trash2 from "lucide-react-native/icons/trash-2";
 import { useTranslation } from "react-i18next";
 import { SectionFrame } from "@/features/menu/SectionFrame";
 import { colors } from "@/shared/theme";
+import { useAppDialog } from "@/shared/AppDialog";
 import type { AppSection } from "@/types/navigation";
 import type { Paper } from "@/types/paper";
 import type {
@@ -60,6 +54,7 @@ export function LibraryScreen({
   onBack,
 }: Props) {
   const { t, i18n } = useTranslation();
+  const { showDialog } = useAppDialog();
   const scrollRef = useRef<ScrollView>(null);
   const offsets = useRef<Record<LibrarySection, number>>({
     saved: 0,
@@ -95,14 +90,19 @@ export function LibraryScreen({
   }, [section, visible]);
 
   const confirmClear = () => {
-    Alert.alert(t("library.clearHistoryTitle"), t("library.clearHistoryBody"), [
-      { text: t("common.cancel"), style: "cancel" },
-      {
-        text: t("library.clear"),
-        style: "destructive",
-        onPress: onClearHistory,
-      },
-    ]);
+    showDialog({
+      kind: "destructive",
+      title: t("library.clearHistoryTitle"),
+      message: t("library.clearHistoryBody"),
+      actions: [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("library.clear"),
+          style: "destructive",
+          onPress: onClearHistory,
+        },
+      ],
+    });
   };
 
   const openDownload = (item: DownloadSummary) => {
@@ -111,10 +111,11 @@ export function LibraryScreen({
   };
 
   const confirmDeleteDownload = (item: DownloadSummary) => {
-    Alert.alert(
-      t("library.removeDownloads"),
-      t("library.removeDownloadsBody"),
-      [
+    showDialog({
+      kind: "destructive",
+      title: t("library.removeDownloads"),
+      message: t("library.removeDownloadsBody"),
+      actions: [
         { text: t("common.cancel"), style: "cancel" },
         {
           text: t("library.clear"),
@@ -122,7 +123,7 @@ export function LibraryScreen({
           onPress: () => onDeleteDownloads(item.arxivId),
         },
       ],
-    );
+    });
   };
 
   return (

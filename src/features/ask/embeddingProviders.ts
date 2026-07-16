@@ -6,7 +6,9 @@ import {
   OPENROUTER_BASE_URL,
   sortModelsFreeFirst,
   type ModelOption,
+  type ProviderProfile,
 } from "@/features/settings/providerCore";
+import { fetchModelCatalog } from "@/features/settings/providers";
 import type { EmbeddingProfile } from "./askTypes";
 
 const PROFILE_KEY = "paprism.embeddingProfile";
@@ -81,10 +83,13 @@ export async function clearEmbeddingProfile(): Promise<void> {
 }
 
 export async function fetchEmbeddingModels(
-  profile: EmbeddingProfile,
+  profile: ProviderProfile,
   apiKey: string,
 ): Promise<ModelOption[]> {
-  if (profile.kind !== "openrouter") return [];
+  if (profile.kind === "google") throw new Error("Google cannot embed text");
+  if (profile.kind === "openai-compatible") {
+    return fetchModelCatalog(profile, apiKey, true);
+  }
   const response = await fetch(`${OPENROUTER_BASE_URL}/embeddings/models`, {
     headers: { Authorization: `Bearer ${apiKey}` },
   });

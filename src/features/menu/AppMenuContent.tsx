@@ -38,8 +38,10 @@ const ITEMS: Item[] = [
 
 export function AppMenuContent({
   onSelect,
+  updateAvailable,
 }: {
   onSelect: (section: AppSection) => void;
+  updateAvailable: boolean;
 }) {
   const { t } = useTranslation();
 
@@ -65,6 +67,12 @@ export function AppMenuContent({
             >
               <Icon color={colors.muted} size={19} strokeWidth={1.8} />
               <Text style={styles.itemText}>{t(item.labelKey)}</Text>
+              {item.id === "about" && updateAvailable ? (
+                <View
+                  accessibilityLabel={t("settings.updateAvailable")}
+                  style={styles.updateDot}
+                />
+              ) : null}
               <ChevronRight color={colors.dim} size={17} strokeWidth={1.8} />
             </Pressable>
           );
@@ -108,5 +116,11 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 15,
     fontWeight: "600",
+  },
+  updateDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.danger,
   },
 });

@@ -138,6 +138,15 @@ export async function deleteProviderApiKey(profileId: string): Promise<void> {
   await SecureStore.deleteItemAsync(secretKey(profileId));
 }
 
+export async function resetProviderState(profileIds: string[]): Promise<void> {
+  await Promise.all(profileIds.map(deleteProviderApiKey));
+  await persistProviderState({
+    profiles: [GOOGLE_PROFILE],
+    activeProfileId: GOOGLE_PROFILE_ID,
+  });
+  await persistAskProviderId(null);
+}
+
 export function createProfileId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }

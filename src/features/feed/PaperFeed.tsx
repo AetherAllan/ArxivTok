@@ -47,6 +47,7 @@ type Props = {
   categories: string[];
   onOpenCategories: () => void;
   onOpenMenu: () => void;
+  updateAvailable: boolean;
   onRead: (paper: Paper) => void;
   isSaved: (arxivId: string) => boolean;
   hasOfflinePaper: (arxivId: string) => boolean;
@@ -71,6 +72,7 @@ export function PaperFeed({
   categories,
   onOpenCategories,
   onOpenMenu,
+  updateAvailable,
   onRead,
   isSaved,
   hasOfflinePaper,
@@ -224,6 +226,9 @@ export function PaperFeed({
         ) : null}
         <Pressable
           accessibilityLabel={t("menu.title")}
+          accessibilityHint={
+            updateAvailable ? t("settings.updateAvailable") : undefined
+          }
           onPress={onOpenMenu}
           style={({ pressed }) => [
             styles.menuButton,
@@ -231,6 +236,7 @@ export function PaperFeed({
           ]}
         >
           <Menu color={colors.text} size={21} strokeWidth={1.8} />
+          {updateAvailable ? <View style={styles.updateDot} /> : null}
         </Pressable>
       </View>
     </View>
@@ -419,6 +425,15 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   menuButtonPressed: { backgroundColor: colors.surfacePressed },
+  updateDot: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.danger,
+  },
   center: {
     flex: 1,
     backgroundColor: colors.background,

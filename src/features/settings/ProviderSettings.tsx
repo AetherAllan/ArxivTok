@@ -10,19 +10,22 @@ import {
   OPENROUTER_BASE_URL,
   type ProviderProfile,
 } from "./providerCore";
-import { ProviderEditor } from "./ProviderEditor";
+import {
+  ProviderEditor,
+  type EditableProviderManager,
+  type ModelLoader,
+} from "./ProviderEditor";
 import { createProfileId } from "./providers";
-import type { useProviderProfiles } from "./useProviderProfiles";
-
-type Manager = ReturnType<typeof useProviderProfiles>;
+import { useAppDialog } from "@/shared/AppDialog";
 
 type Props = {
-  manager: Manager;
+  manager: EditableProviderManager;
   activeProfileId?: string | null;
   onSelect?: (profileId: string) => Promise<void>;
   includeGoogle?: boolean;
   title?: string;
   hint?: string;
+  modelLoader?: ModelLoader;
 };
 
 export function ProviderSettings({
@@ -32,8 +35,10 @@ export function ProviderSettings({
   includeGoogle = true,
   title,
   hint,
+  modelLoader,
 }: Props) {
   const { t } = useTranslation();
+  const { showError } = useAppDialog();
   const [draft, setDraft] = useState<ProviderProfile | null>(null);
 
   const create = (kind: "openrouter" | "openai-compatible") => {
@@ -56,7 +61,11 @@ export function ProviderSettings({
           <View key={profile.id} style={styles.profileRow}>
             <Pressable
               style={styles.profileMain}
-              onPress={() => void onSelect(profile.id)}
+              onPress={() =>
+                void onSelect(profile.id).catch((error) =>
+                  showError(t("common.operationFailed"), error),
+                )
+              }
             >
               <View style={styles.profileTitle}>
                 {activeProfileId === profile.id ? (
@@ -100,6 +109,7 @@ export function ProviderSettings({
         key={draft?.id ?? "closed"}
         draft={draft}
         manager={manager}
+        modelLoader={modelLoader}
         onClose={() => setDraft(null)}
       />
     </View>

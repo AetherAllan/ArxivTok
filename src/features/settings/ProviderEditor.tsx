@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -10,28 +9,45 @@ import {
   View,
 } from "react-native";
 import Trash2 from "lucide-react-native/icons/trash-2";
-import X from "lucide-react-native/icons/x";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radii } from "@/shared/theme";
 import { type ModelOption, type ProviderProfile } from "./providerCore";
 import { fetchModelCatalog } from "./providers";
-import type { useProviderProfiles } from "./useProviderProfiles";
 import { ModelPicker } from "./ModelPicker";
+import { SecretField } from "./SecretField";
+import { useAppDialog } from "@/shared/AppDialog";
 
-type Manager = ReturnType<typeof useProviderProfiles>;
-const SAVED_KEY_MASK = "••••••••••••";
+export type EditableProviderManager = {
+  profiles: ProviderProfile[];
+  activeProfileId: string | null;
+  saveProfile: (profile: ProviderProfile, apiKey?: string) => Promise<void>;
+  deleteProfile: (profileId: string) => Promise<void>;
+  setActiveProfileId: (profileId: string) => Promise<void>;
+  getApiKey: (profileId: string) => Promise<string | null>;
+};
+
+export type ModelLoader = (
+  profile: ProviderProfile,
+  apiKey: string,
+) => Promise<ModelOption[]>;
+
+const loadProviderModels: ModelLoader = (profile, apiKey) =>
+  fetchModelCatalog(profile, apiKey, true);
 
 export function ProviderEditor({
   draft,
   manager,
+  modelLoader = loadProviderModels,
   onClose,
 }: {
   draft: ProviderProfile | null;
-  manager: Manager;
+  manager: EditableProviderManager;
+  modelLoader?: ModelLoader;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  const { showDialog, showError } = useAppDialog();
   const insets = useSafeAreaInsets();
   const [form, setForm] = useState<ProviderProfile | null>(draft);
   const [apiKey, setApiKey] = useState("");
@@ -71,17 +87,16 @@ export function ProviderEditor({
     setLoading(true);
     try {
       const key = apiKey.trim() || (await manager.getApiKey(form.id));
-      const next = await fetchModelCatalog(form, key, true);
+      if (!key) throw new Error(t("provider.keyRequired"));
+      const next = await modelLoader(form, key);
       setModels(next);
-      Alert.alert(
-        t("provider.connectionOk"),
-        t("provider.modelsFound", { count: next.length }),
-      );
+      showDialog({
+        kind: "success",
+        title: t("provider.connectionOk"),
+        message: t("provider.modelsFound", { count: next.length }),
+      });
     } catch (error) {
-      Alert.alert(
-        t("provider.connectionFailed"),
-        error instanceof Error ? error.message : t("common.unknownError"),
-      );
+      showError(t("provider.connectionFailed"), error);
     } finally {
       setLoading(false);
     }
@@ -93,23 +108,37 @@ export function ProviderEditor({
       if (!existingKey) throw new Error(t("provider.keyRequired"));
       await manager.saveProfile(form, apiKey);
       onClose();
+      showDialog({ kind: "success", title: t("provider.saved") });
     } catch (error) {
-      Alert.alert(
-        t("provider.saveFailed"),
-        error instanceof Error ? error.message : t("common.unknownError"),
-      );
+      showError(t("provider.saveFailed"), error);
     }
   };
 
   const remove = () => {
-    Alert.alert(t("provider.deleteTitle"), form.name, [
-      { text: t("common.cancel"), style: "cancel" },
-      {
-        text: t("library.clear"),
-        style: "destructive",
-        onPress: () => void manager.deleteProfile(form.id).then(onClose),
-      },
-    ]);
+    showDialog({
+      kind: "destructive",
+      title: t("provider.deleteTitle"),
+      message: form.name,
+      actions: [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("library.clear"),
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await manager.deleteProfile(form.id);
+              onClose();
+              showDialog({
+                kind: "success",
+                title: t("provider.deleted"),
+              });
+            } catch (error) {
+              showError(t("common.operationFailed"), error);
+            }
+          },
+        },
+      ],
+    });
   };
 
   return (
@@ -208,78 +237,6 @@ function Field(
   );
 }
 
-function SecretField({
-  label,
-  value,
-  hasSavedKey,
-  placeholder,
-  clearLabel,
-  onChangeText,
-}: {
-  label: string;
-  value: string;
-  hasSavedKey: boolean;
-  placeholder: string;
-  clearLabel: string;
-  onChangeText: (value: string) => void;
-}) {
-  const [replacingSavedKey, setReplacingSavedKey] = useState(false);
-  const showingSavedMask =
-    hasSavedKey && !replacingSavedKey && value.length === 0;
-  const inputValue = showingSavedMask ? SAVED_KEY_MASK : value;
-
-  const changeValue = (next: string) => {
-    if (!showingSavedMask) {
-      onChangeText(next);
-      return;
-    }
-
-    // The editable bullets are only a local sentinel. The first keyboard edit
-    // replaces them, and they must never be mistaken for a new API key.
-    setReplacingSavedKey(true);
-    onChangeText(next.replaceAll("•", ""));
-  };
-
-  const clearValue = () => {
-    setReplacingSavedKey(true);
-    onChangeText("");
-  };
-
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={styles.secretInputShell}>
-        <TextInput
-          value={inputValue}
-          placeholder={placeholder}
-          placeholderTextColor={colors.dim}
-          secureTextEntry
-          selectTextOnFocus={showingSavedMask}
-          autoCapitalize="none"
-          autoCorrect={false}
-          spellCheck={false}
-          onChangeText={changeValue}
-          style={styles.secretInput}
-        />
-        {inputValue.length > 0 ? (
-          <Pressable
-            accessibilityLabel={clearLabel}
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={clearValue}
-            style={({ pressed }) => [
-              styles.clearKey,
-              pressed && styles.clearKeyPressed,
-            ]}
-          >
-            <X color={colors.muted} size={17} strokeWidth={1.8} />
-          </Pressable>
-        ) : null}
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   editor: { flex: 1, backgroundColor: colors.background },
   header: {
@@ -305,29 +262,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
   },
-  secretInputShell: {
-    minHeight: 47,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surfaceRaised,
-    borderRadius: radii.medium,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  secretInput: {
-    flex: 1,
-    color: colors.text,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 14,
-  },
-  clearKey: {
-    width: 42,
-    height: 42,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  clearKeyPressed: { opacity: 0.65 },
   disabled: { color: colors.dim },
   testButton: {
     backgroundColor: colors.text,

@@ -31,6 +31,7 @@ type Props = {
   interactive: boolean;
   onSelect: (section: AppSection) => void;
   onCloseComplete: () => void;
+  updateAvailable: boolean;
 };
 
 const DRAWER_SPRING = {
@@ -45,6 +46,7 @@ export function AppMenu({
   interactive,
   onSelect,
   onCloseComplete,
+  updateAvailable,
 }: Props) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -187,7 +189,10 @@ export function AppMenu({
               panelStyle,
             ]}
           >
-            <AppMenuContent onSelect={onSelect} />
+            <AppMenuContent
+              onSelect={onSelect}
+              updateAvailable={updateAvailable}
+            />
           </Animated.View>
         </GestureDetector>
       </View>

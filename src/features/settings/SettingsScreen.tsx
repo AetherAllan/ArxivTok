@@ -1,6 +1,16 @@
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import ExternalLink from "lucide-react-native/icons/external-link";
 import Info from "lucide-react-native/icons/info";
+import RefreshCw from "lucide-react-native/icons/refresh-cw";
 import RotateCcw from "lucide-react-native/icons/rotate-ccw";
 import { useTranslation } from "react-i18next";
 import { SectionFrame } from "@/features/menu/SectionFrame";
@@ -15,6 +25,8 @@ import { ProviderSettings } from "./ProviderSettings";
 import { AskSettings } from "@/features/ask/AskSettings";
 import type { useEmbeddingProfile } from "@/features/ask/useEmbeddingProfile";
 import type { useProviderProfiles } from "./useProviderProfiles";
+import type { useAppUpdate } from "./useAppUpdate";
+import { useAppDialog } from "@/shared/AppDialog";
 
 const TRANSLATE_OPTIONS: {
   id: TranslateLangPref;
@@ -57,12 +69,13 @@ type Props = {
   translateLang: TranslateLangPref;
   onUiLangChange: (lang: UiLangPref) => void;
   onTranslateLangChange: (lang: TranslateLangPref) => void;
-  onReset: () => void;
+  onReset: () => Promise<void>;
   onBack: () => void;
   providerManager: ReturnType<typeof useProviderProfiles>;
   embeddingManager: ReturnType<typeof useEmbeddingProfile>;
   askEnabled: boolean;
   onAskEnabledChange: (enabled: boolean) => void;
+  appUpdate: ReturnType<typeof useAppUpdate>;
 };
 
 export type SettingsSection = Extract<
@@ -83,8 +96,10 @@ export function SettingsScreen({
   embeddingManager,
   askEnabled,
   onAskEnabledChange,
+  appUpdate,
 }: Props) {
   const { t } = useTranslation();
+  const { showDialog, showError } = useAppDialog();
   const [picker, setPicker] = useState<"ui" | "translation" | null>(null);
   const title = t(
     section === "translation"
@@ -126,6 +141,41 @@ export function SettingsScreen({
       keywords: option.keywords,
     }));
   }, [t]);
+
+  const confirmReset = () => {
+    showDialog({
+      kind: "destructive",
+      title: t("settings.resetTitle"),
+      message: t("settings.resetBody"),
+      actions: [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("settings.reset"),
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await onReset();
+              showDialog({
+                kind: "success",
+                title: t("settings.resetSuccess"),
+              });
+            } catch (error) {
+              showError(t("common.operationFailed"), error);
+            }
+          },
+        },
+      ],
+    });
+  };
+
+  const openRelease = async () => {
+    if (!appUpdate.release) return;
+    try {
+      await Linking.openURL(appUpdate.release.url);
+    } catch (error) {
+      showError(t("common.operationFailed"), error);
+    }
+  };
 
   return (
     <SectionFrame visible={visible} title={title} onBackComplete={onBack}>
@@ -178,16 +228,69 @@ export function SettingsScreen({
                   <View>
                     <Text style={styles.aboutTitle}>Paprism</Text>
                     <Text style={styles.aboutBody}>
-                      {t("settings.version", { version: "1.0.0" })}
+                      {t("settings.version", {
+                        version: appUpdate.currentVersion,
+                      })}
                     </Text>
                   </View>
                 </View>
                 <Text style={styles.aboutBody}>{t("settings.aboutBody1")}</Text>
                 <Text style={styles.aboutBody}>{t("settings.aboutBody2")}</Text>
+                <View style={styles.updateArea}>
+                  <View style={styles.updateCopy}>
+                    {appUpdate.status === "checking" ? (
+                      <ActivityIndicator color={colors.accent} size="small" />
+                    ) : (
+                      <View
+                        style={[
+                          styles.statusDot,
+                          appUpdate.status === "available" &&
+                            styles.statusDotAvailable,
+                          appUpdate.status === "error" && styles.statusDotError,
+                        ]}
+                      />
+                    )}
+                    <View style={styles.updateText}>
+                      <Text style={styles.updateTitle}>
+                        {t(`settings.update.${appUpdate.status}`, {
+                          version: appUpdate.release?.version,
+                        })}
+                      </Text>
+                      {appUpdate.status === "available" ? (
+                        <Text style={styles.updateHint}>
+                          {t("settings.updateAvailableHint")}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                  {appUpdate.status === "available" ? (
+                    <Pressable
+                      accessibilityRole="link"
+                      onPress={() => void openRelease()}
+                      style={styles.updateButton}
+                    >
+                      <ExternalLink color={colors.inverse} size={15} />
+                      <Text style={styles.updateButtonText}>
+                        {t("settings.viewUpdate")}
+                      </Text>
+                    </Pressable>
+                  ) : appUpdate.status === "error" ||
+                    appUpdate.status === "current" ? (
+                    <Pressable
+                      onPress={() => void appUpdate.check()}
+                      style={styles.retryButton}
+                    >
+                      <RefreshCw color={colors.textSecondary} size={15} />
+                      <Text style={styles.retryText}>
+                        {t("settings.checkAgain")}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               </View>
 
               <Pressable
-                onPress={onReset}
+                onPress={confirmReset}
                 style={({ pressed }) => [
                   styles.resetBtn,
                   pressed && styles.resetPressed,
@@ -260,6 +363,45 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
   },
+  updateArea: {
+    marginTop: 14,
+    paddingTop: 14,
+    gap: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  updateCopy: { flexDirection: "row", alignItems: "center", gap: 10 },
+  updateText: { flex: 1 },
+  updateTitle: { color: colors.textSecondary, fontSize: 14, fontWeight: "700" },
+  updateHint: { color: colors.dim, fontSize: 12, lineHeight: 17, marginTop: 3 },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#34d399",
+  },
+  statusDotAvailable: { backgroundColor: colors.danger },
+  statusDotError: { backgroundColor: colors.dim },
+  updateButton: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    borderRadius: radii.medium,
+    backgroundColor: colors.text,
+  },
+  updateButtonText: { color: colors.inverse, fontWeight: "700" },
+  retryButton: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    borderRadius: radii.medium,
+    backgroundColor: colors.surfaceRaised,
+  },
+  retryText: { color: colors.textSecondary, fontSize: 13, fontWeight: "600" },
   resetBtn: {
     marginTop: 28,
     minHeight: 48,

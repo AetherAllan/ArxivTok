@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, StyleSheet } from "react-native";
+import { StyleSheet } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useTranslation } from "react-i18next";
@@ -20,10 +20,12 @@ import {
   type SettingsSection,
 } from "@/features/settings/SettingsScreen";
 import { useProviderProfiles } from "@/features/settings/useProviderProfiles";
+import { useAppUpdate } from "@/features/settings/useAppUpdate";
 import { PaperViewer } from "@/features/viewer/PaperViewer";
 import { useEmbeddingProfile } from "@/features/ask/useEmbeddingProfile";
 import { useAppPrefs } from "@/shared/useAppPrefs";
 import { colors } from "@/shared/theme";
+import { AppDialogProvider, useAppDialog } from "@/shared/AppDialog";
 import type { AppSection } from "@/types/navigation";
 import type { Paper } from "@/types/paper";
 import type {
@@ -37,7 +39,17 @@ type ViewerState = {
 };
 
 export default function App() {
+  return (
+    <AppDialogProvider>
+      <AppContent />
+    </AppDialogProvider>
+  );
+}
+
+function AppContent() {
   const { t } = useTranslation();
+  const { showDialog, showError: showDialogError } = useAppDialog();
+  const appUpdate = useAppUpdate();
   const {
     ready: prefsReady,
     prefs,
@@ -92,18 +104,16 @@ export default function App() {
     (error: unknown) => {
       if (error instanceof Error && error.name === "AbortError") return;
       if (error instanceof PdfMetadataError) {
-        Alert.alert(
-          t("library.pdfMetadataFailedTitle"),
-          t("library.pdfMetadataFailedBody"),
-        );
+        showDialog({
+          kind: "error",
+          title: t("library.pdfMetadataFailedTitle"),
+          message: t("library.pdfMetadataFailedBody"),
+        });
         return;
       }
-      Alert.alert(
-        t("common.operationFailed"),
-        error instanceof Error ? error.message : t("common.unknownError"),
-      );
+      showDialogError(t("common.operationFailed"), error);
     },
-    [t],
+    [showDialog, showDialogError, t],
   );
 
   useEffect(() => {
@@ -147,16 +157,20 @@ export default function App() {
       return;
     }
     recoveryAlertShown.current = true;
-    Alert.alert(t("recovery.title"), t("recovery.body"), [
-      {
-        text: t("common.done"),
-        onPress: () => {
-          clearPrefsRecoveryWarning();
-          clearLibraryRecoveryWarning();
-          clearProviderRecoveryWarning();
+    showDialog({
+      title: t("recovery.title"),
+      message: t("recovery.body"),
+      actions: [
+        {
+          text: t("common.done"),
+          onPress: () => {
+            clearPrefsRecoveryWarning();
+            clearLibraryRecoveryWarning();
+            clearProviderRecoveryWarning();
+          },
         },
-      },
-    ]);
+      ],
+    });
   }, [
     clearLibraryRecoveryWarning,
     clearPrefsRecoveryWarning,
@@ -167,6 +181,7 @@ export default function App() {
     prefsRecoveryWarning,
     providerReady,
     providerRecoveryWarning,
+    showDialog,
     t,
   ]);
 
@@ -177,21 +192,39 @@ export default function App() {
         openOffline(offline);
         return;
       }
-      Alert.alert(t("library.downloadChoiceTitle"), paper.title, [
-        { text: t("common.cancel"), style: "cancel" },
-        {
-          text: t("library.downloadOffline"),
-          onPress: () =>
-            void downloadOffline(paper).then(openOffline).catch(showError),
-        },
-        {
-          text: t("library.downloadPdf"),
-          onPress: () => void downloadPdf(paper).catch(showError),
-        },
-      ]);
+      showDialog({
+        title: t("library.downloadChoiceTitle"),
+        message: paper.title,
+        actions: [
+          {
+            text: t("library.downloadPdf"),
+            onPress: () => void downloadPdf(paper).catch(showError),
+          },
+          {
+            text: t("library.downloadOffline"),
+            onPress: () =>
+              void downloadOffline(paper).then(openOffline).catch(showError),
+          },
+          { text: t("common.cancel"), style: "cancel" },
+        ],
+      });
     },
-    [downloadOffline, downloadPdf, getOfflinePaper, openOffline, showError, t],
+    [
+      downloadOffline,
+      downloadPdf,
+      getOfflinePaper,
+      openOffline,
+      showDialog,
+      showError,
+      t,
+    ],
   );
+
+  const resetAllSettings = useCallback(async () => {
+    await providerManager.resetAll();
+    await embeddingManager.clear();
+    await reset();
+  }, [embeddingManager, providerManager, reset]);
 
   const openMenu = useCallback(() => {
     setActiveSection(null);
@@ -258,6 +291,7 @@ export default function App() {
           categories={prefs.categories}
           onOpenCategories={() => setPickerOpen(true)}
           onOpenMenu={() => setMenuOpen(true)}
+          updateAvailable={appUpdate.status === "available"}
           onRead={openPaper}
           isSaved={isSaved}
           hasOfflinePaper={hasOfflinePaper}
@@ -312,12 +346,13 @@ export default function App() {
           translateLang={prefs.translateLang}
           onUiLangChange={setUiLang}
           onTranslateLangChange={setTranslateLang}
-          onReset={reset}
+          onReset={resetAllSettings}
           onBack={openMenu}
           providerManager={providerManager}
           embeddingManager={embeddingManager}
           askEnabled={prefs.askEnabled}
           onAskEnabledChange={setAskEnabled}
+          appUpdate={appUpdate}
         />
         <AppMenu
           visible={menuOpen}
@@ -328,6 +363,7 @@ export default function App() {
             setActiveSection(section);
           }}
           onCloseComplete={() => setMenuOpen(false)}
+          updateAvailable={appUpdate.status === "available"}
         />
         <PaperViewer
           paper={viewer?.paper ?? null}

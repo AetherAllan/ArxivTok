@@ -6,9 +6,11 @@ import {
   loadProviderState,
   persistProviderState,
   persistAskProviderId,
+  resetProviderState,
   setProviderApiKey,
 } from "./providers";
 import {
+  GOOGLE_PROFILE,
   GOOGLE_PROFILE_ID,
   validateProfile,
   type ProviderProfile,
@@ -115,6 +117,16 @@ export function useProviderProfiles() {
     await persistAskProviderId(profileId);
     setActiveAskProfileIdState(profileId);
   }, []);
+  const resetAll = useCallback(async () => {
+    await resetProviderState(
+      profiles
+        .filter((profile) => profile.id !== GOOGLE_PROFILE_ID)
+        .map((profile) => profile.id),
+    );
+    setProfiles([GOOGLE_PROFILE]);
+    setActiveProfileIdState(GOOGLE_PROFILE_ID);
+    setActiveAskProfileIdState(null);
+  }, [profiles]);
 
   return {
     ready,
@@ -136,6 +148,7 @@ export function useProviderProfiles() {
     deleteProfile,
     setActiveProfileId,
     setActiveAskProfileId,
+    resetAll,
     getApiKey: getProviderApiKey,
   };
 }

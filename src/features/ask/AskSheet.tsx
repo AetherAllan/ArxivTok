@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import {
   ActivityIndicator,
-  Alert,
   BackHandler,
   KeyboardAvoidingView,
   Linking,
@@ -31,6 +30,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { ProviderProfile } from "@/features/settings/providerCore";
 import { colors, radii } from "@/shared/theme";
 import type { useAskConversation } from "./useAskConversation";
+import { useAppDialog } from "@/shared/AppDialog";
 
 type Conversation = ReturnType<typeof useAskConversation>;
 const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
@@ -104,6 +104,7 @@ export function AskSheet({
   blurTarget: RefObject<View | null>;
 }) {
   const { t } = useTranslation();
+  const { showDialog, showError } = useAppDialog();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const scroll = useRef<ScrollView>(null);
@@ -138,12 +139,7 @@ export function AskSheet({
     if (!question) return;
     void conversation
       .send(question, visibleBlockId, webSearch)
-      .catch((error) =>
-        Alert.alert(
-          t("common.operationFailed"),
-          error instanceof Error ? error.message : t("common.unknownError"),
-        ),
-      );
+      .catch((error) => showError(t("common.operationFailed"), error));
   };
 
   if (!visible) return null;
@@ -177,18 +173,29 @@ export function AskSheet({
               <Pressable
                 hitSlop={8}
                 onPress={() =>
-                  Alert.alert(
-                    t("ask.clearPaperTitle"),
-                    t("ask.clearPaperBody"),
-                    [
+                  showDialog({
+                    kind: "destructive",
+                    title: t("ask.clearPaperTitle"),
+                    message: t("ask.clearPaperBody"),
+                    actions: [
                       { text: t("common.cancel"), style: "cancel" },
                       {
                         text: t("library.clear"),
                         style: "destructive",
-                        onPress: () => void conversation.clear(),
+                        onPress: async () => {
+                          try {
+                            await conversation.clear();
+                            showDialog({
+                              kind: "success",
+                              title: t("ask.clearPaperSuccess"),
+                            });
+                          } catch (error) {
+                            showError(t("common.operationFailed"), error);
+                          }
+                        },
                       },
                     ],
-                  )
+                  })
                 }
               >
                 <Trash2 color={colors.dim} size={18} />
@@ -311,12 +318,7 @@ export function AskSheet({
                             void conversation
                               .retry(message.id, visibleBlockId, webSearch)
                               .catch((error) =>
-                                Alert.alert(
-                                  t("common.operationFailed"),
-                                  error instanceof Error
-                                    ? error.message
-                                    : t("common.unknownError"),
-                                ),
+                                showError(t("common.operationFailed"), error),
                               )
                           }
                         >

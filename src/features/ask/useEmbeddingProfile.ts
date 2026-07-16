@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { EmbeddingProfile } from "./askTypes";
+import type { ProviderProfile } from "@/features/settings/providerCore";
 import {
   clearEmbeddingProfile,
   getEmbeddingApiKey,
@@ -24,14 +25,30 @@ export function useEmbeddingProfile() {
     };
   }, []);
 
-  const save = useCallback(async (next: EmbeddingProfile, apiKey?: string) => {
-    await saveEmbeddingProfile(next, apiKey);
-    setProfile(next);
-  }, []);
+  const saveProfile = useCallback(
+    async (next: ProviderProfile, apiKey?: string) => {
+      if (next.kind === "google") throw new Error("Google cannot embed text");
+      const embeddingProfile: EmbeddingProfile = { ...next, kind: next.kind };
+      await saveEmbeddingProfile(embeddingProfile, apiKey);
+      setProfile(embeddingProfile);
+    },
+    [],
+  );
   const clear = useCallback(async () => {
     await clearEmbeddingProfile();
     setProfile(null);
   }, []);
+  const deleteProfile = useCallback(async () => clear(), [clear]);
 
-  return { ready, profile, save, clear, getApiKey: getEmbeddingApiKey };
+  return {
+    ready,
+    profile,
+    profiles: profile ? [profile] : [],
+    activeProfileId: profile?.id ?? null,
+    saveProfile,
+    deleteProfile,
+    setActiveProfileId: async () => undefined,
+    clear,
+    getApiKey: getEmbeddingApiKey,
+  };
 }
