@@ -9,6 +9,7 @@ export const colors = {
   textSecondary: "#d4d4d8",
   muted: "#a1a1aa",
   dim: "#71717a",
+  accent: "#a78bfa",
   inverse: "#18181b",
   danger: "#f87171",
 } as const;

@@ -50,7 +50,7 @@ type Props = {
 
 type Mode = "source" | "dual" | "translation";
 const ignoreImageError = () => undefined;
-const accent = "#a78bfa";
+const accent = colors.accent;
 const accentStrong = "#8b5cf6";
 const translatedText = "#ddd6fe";
 
@@ -185,6 +185,18 @@ const TRANSLATION_STYLE: MarkdownStyle = {
   h6: { ...MARKDOWN_STYLE.h6, color: "#c4b5fd" },
   list: { ...MARKDOWN_STYLE.list, color: translatedText },
   table: { ...MARKDOWN_STYLE.table, color: translatedText },
+};
+
+const DUAL_TRANSLATION_STYLE: MarkdownStyle = {
+  ...TRANSLATION_STYLE,
+  // In dual mode the translated heading immediately follows the same source
+  // heading. Preserve its typography without stacking two section top margins.
+  h1: { ...TRANSLATION_STYLE.h1, marginTop: 0 },
+  h2: { ...TRANSLATION_STYLE.h2, marginTop: 0 },
+  h3: { ...TRANSLATION_STYLE.h3, marginTop: 0 },
+  h4: { ...TRANSLATION_STYLE.h4, marginTop: 0 },
+  h5: { ...TRANSLATION_STYLE.h5, marginTop: 0 },
+  h6: { ...TRANSLATION_STYLE.h6, marginTop: 0 },
 };
 
 export function PaperViewer({
@@ -601,6 +613,7 @@ function ReaderBlock({
             markdown={translation}
             onLinkPress={onLinkPress}
             translated
+            compactHeading={mode === "dual"}
           />
         </View>
       ) : null}
@@ -611,16 +624,24 @@ function ReaderBlock({
 function PaperMarkdown({
   markdown,
   translated = false,
+  compactHeading = false,
   onLinkPress,
 }: {
   markdown: string;
   translated?: boolean;
+  compactHeading?: boolean;
   onLinkPress: (event: { url: string }) => void;
 }) {
   return (
     <EnrichedMarkdownText
       markdown={markdown}
-      markdownStyle={translated ? TRANSLATION_STYLE : MARKDOWN_STYLE}
+      markdownStyle={
+        translated
+          ? compactHeading
+            ? DUAL_TRANSLATION_STYLE
+            : TRANSLATION_STYLE
+          : MARKDOWN_STYLE
+      }
       onLinkPress={onLinkPress}
       selectable
       flavor="github"

@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   arxivId: {
-    color: colors.dim,
+    color: colors.accent,
     fontSize: 12,
     marginBottom: 18,
     fontVariant: ["tabular-nums"],

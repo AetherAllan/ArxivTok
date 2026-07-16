@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   catHint: {
-    color: colors.dim,
+    color: colors.accent,
     fontSize: 12,
   },
   headerRight: {
